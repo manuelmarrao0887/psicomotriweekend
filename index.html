@@ -4,9 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="theme-color" content="#F2F2F7"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
   <title>Férias em Grupo 🏖️</title>
-  <style>*{margin:0;padding:0;box-sizing:border-box}html,body,#root{height:100%}body{background:#F2F2F7;-webkit-font-smoothing:antialiased}</style>
+  <style>*{margin:0;padding:0;box-sizing:border-box}html,body,#root{height:100%}body{background:#F2F2F7;-webkit-font-smoothing:antialiased}@keyframes spin{to{transform:rotate(360deg)}}</style>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
@@ -16,464 +15,804 @@
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
+// ─── FIREBASE ────────────────────────────────────────────────────────────────
 firebase.initializeApp({
-  apiKey:            "AIzaSyBly4RaIt28csWQM9LBYoeQOMbzrkCBzyE",
-  authDomain:        "psicomotriweekend.firebaseapp.com",
-  projectId:         "psicomotriweekend",
-  storageBucket:     "psicomotriweekend.firebasestorage.app",
+  apiKey: "AIzaSyBly4RaIt28csWQM9LBYoeQOMbzrkCBzyE",
+  authDomain: "psicomotriweekend.firebaseapp.com",
+  projectId: "psicomotriweekend",
+  storageBucket: "psicomotriweekend.firebasestorage.app",
   messagingSenderId: "889638444753",
-  appId:             "1:889638444753:web:bf8a94da7d2da656daaff0"
+  appId: "1:889638444753:web:bf8a94da7d2da656daaff0"
 });
 const db = firebase.firestore();
-const trips     = ()           => db.collection("trips");
-const people    = tid          => db.collection("trips").doc(tid).collection("people");
-const meals     = tid          => db.collection("trips").doc(tid).collection("meals");
-const expenses  = tid          => db.collection("trips").doc(tid).collection("expenses");
-const toDoc     = d            => ({ id: d.id, ...d.data() });
-const ts        = ()           => firebase.firestore.FieldValue.serverTimestamp();
-
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const DIETARY_OPTIONS = ["Vegetariano","Vegan","Sem Glúten","Sem Lactose","Sem Frutos do Mar","Sem Frutos Secos","Halal","Kosher","Sem Álcool","Diabético"];
-const EXPENSE_CATS = [
-  {id:"supermercado",label:"Supermercado",emoji:"🛒"},{id:"restaurante",label:"Restaurante",emoji:"🍽️"},
-  {id:"transporte",label:"Transporte",emoji:"🚗"},{id:"alojamento",label:"Alojamento",emoji:"🏠"},
-  {id:"actividade",label:"Actividade",emoji:"🎉"},{id:"outro",label:"Outro",emoji:"💳"},
-];
-const MEAL_TYPES = [
-  {key:"breakfast",label:"Pequeno-almoço",emoji:"☕"},{key:"lunch",label:"Almoço",emoji:"🥗"},
-  {key:"snack",label:"Lanche",emoji:"🍎"},{key:"dinner",label:"Jantar",emoji:"🍽️"},
-];
-const AVATAR_COLORS = ["#007AFF","#34C759","#FF9500","#AF52DE","#FF2D55","#5AC8FA","#FFCC00","#FF6B35","#30B0C7","#32ADE6"];
-const C = {
-  bg:"#F2F2F7",card:"#FFFFFF",primary:"#007AFF",primaryBg:"rgba(0,122,255,0.10)",
-  danger:"#FF3B30",success:"#34C759",successBg:"rgba(52,199,89,0.10)",warning:"#FF9500",
-  label:"#1C1C1E",secondary:"#8E8E93",tertiary:"#AEAEB2",separator:"rgba(60,60,67,0.18)",fill:"rgba(120,120,128,0.12)",
+// Helpers com nomes únicos — sem conflito com state vars
+const FS = {
+  trips:    ()    => db.collection("trips"),
+  people:   (tid) => db.collection("trips").doc(tid).collection("people"),
+  meals:    (tid) => db.collection("trips").doc(tid).collection("meals"),
+  expenses: (tid) => db.collection("trips").doc(tid).collection("expenses"),
+  ts:       ()    => firebase.firestore.FieldValue.serverTimestamp(),
+  toDoc:    (d)   => ({ id: d.id, ...d.data() }),
 };
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
-const { useState, useEffect, useMemo, useCallback, useRef } = React;
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const DIETARY = ["Vegetariano","Vegan","Sem Glúten","Sem Lactose","Sem Frutos do Mar","Sem Frutos Secos","Halal","Kosher","Sem Álcool","Diabético"];
+const CATS = [
+  {id:"supermercado",label:"Supermercado",emoji:"🛒"},
+  {id:"restaurante",label:"Restaurante",emoji:"🍽️"},
+  {id:"transporte",label:"Transporte",emoji:"🚗"},
+  {id:"alojamento",label:"Alojamento",emoji:"🏠"},
+  {id:"actividade",label:"Actividade",emoji:"🎉"},
+  {id:"outro",label:"Outro",emoji:"💳"},
+];
+const MEALS = [
+  {key:"breakfast",label:"Pequeno-almoço",emoji:"☕"},
+  {key:"lunch",label:"Almoço",emoji:"🥗"},
+  {key:"snack",label:"Lanche",emoji:"🍎"},
+  {key:"dinner",label:"Jantar",emoji:"🍽️"},
+];
+const ACOLORS = ["#007AFF","#34C759","#FF9500","#AF52DE","#FF2D55","#5AC8FA","#FFCC00","#FF6B35","#30B0C7","#32ADE6"];
+const C = {
+  bg:"#F2F2F7", card:"#FFFFFF", primary:"#007AFF", pBg:"rgba(0,122,255,.10)",
+  danger:"#FF3B30", success:"#34C759", sBg:"rgba(52,199,89,.10)", warning:"#FF9500",
+  label:"#1C1C1E", sec:"#8E8E93", ter:"#AEAEB2", sep:"rgba(60,60,67,.18)", fill:"rgba(120,120,128,.12)",
+};
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
 const initials  = n => (n||"?").split(" ").map(x=>x[0]).join("").toUpperCase().slice(0,2);
-const currency  = v => new Intl.NumberFormat("pt-PT",{style:"currency",currency:"EUR"}).format(v||0);
-const avatarClr = id => { const h=String(id||0).split("").reduce((a,c)=>a+c.charCodeAt(0),0); return AVATAR_COLORS[h%AVATAR_COLORS.length]; };
+const money     = v => new Intl.NumberFormat("pt-PT",{style:"currency",currency:"EUR"}).format(v||0);
+const aclr      = id => { const h=String(id||0).split("").reduce((a,c)=>a+c.charCodeAt(0),0); return ACOLORS[h%ACOLORS.length]; };
 const genCode   = () => Math.random().toString(36).slice(2,8).toUpperCase();
-const today     = () => new Date().toISOString().split("T")[0];
-
+const todayStr  = () => new Date().toISOString().split("T")[0];
+const fmtDate   = ds => ds ? new Date(ds+"T00:00:00").toLocaleDateString("pt-PT",{weekday:"short",day:"numeric",month:"short"}) : "";
 function getDays(s,e){
-  if(!s||!e)return[];
-  const days=[];
-  for(let d=new Date(s+"T00:00:00");d<=new Date(e+"T00:00:00");d.setDate(d.getDate()+1))
-    days.push(new Date(d).toISOString().split("T")[0]);
-  return days;
+  if(!s||!e) return [];
+  const out=[];
+  for(let d=new Date(s+"T00:00:00"); d<=new Date(e+"T00:00:00"); d.setDate(d.getDate()+1))
+    out.push(new Date(d).toISOString().split("T")[0]);
+  return out;
 }
-function fmtDate(ds){if(!ds)return"";return new Date(ds+"T00:00:00").toLocaleDateString("pt-PT",{weekday:"short",day:"numeric",month:"short"});}
 
-// ─── DEBT SIMPLIFICATION ─────────────────────────────────────────────────────
-function simplify(exps, ppl){
-  const bal={};ppl.forEach(p=>{bal[p.id]=0;});
-  exps.forEach(({amount,paidBy,splitWith})=>{
-    if(!splitWith?.length)return;
-    bal[paidBy]=(bal[paidBy]||0)+parseFloat(amount||0);
-    const share=parseFloat(amount||0)/splitWith.length;
-    splitWith.forEach(id=>{bal[id]=(bal[id]||0)-share;});
+// ─── SPLITWISE ALGORITHM ─────────────────────────────────────────────────────
+function simplify(exps, ppl) {
+  const bal = {};
+  ppl.forEach(p => { bal[p.id] = 0; });
+  exps.forEach(({ amount, paidBy, splitWith }) => {
+    if (!splitWith?.length) return;
+    bal[paidBy] = (bal[paidBy]||0) + +amount;
+    const share = +amount / splitWith.length;
+    splitWith.forEach(id => { bal[id] = (bal[id]||0) - share; });
   });
-  const cred=[],debt=[];
-  Object.entries(bal).forEach(([id,b])=>{if(b>0.01)cred.push({id,a:b});else if(b<-0.01)debt.push({id,a:-b});});
-  cred.sort((a,b)=>b.a-a.a);debt.sort((a,b)=>b.a-a.a);
-  const txns=[];let i=0,j=0;
-  while(i<cred.length&&j<debt.length){
-    const amt=Math.min(cred[i].a,debt[j].a);
-    if(amt>0.01)txns.push({from:debt[j].id,to:cred[i].id,amount:Math.round(amt*100)/100});
-    cred[i].a-=amt;debt[j].a-=amt;
-    if(cred[i].a<0.01)i++;if(debt[j].a<0.01)j++;
+  const pos = [], neg = [];
+  Object.entries(bal).forEach(([id,b]) => {
+    if (b > 0.01) pos.push({id,a:b}); else if (b < -0.01) neg.push({id,a:-b});
+  });
+  pos.sort((a,b)=>b.a-a.a); neg.sort((a,b)=>b.a-a.a);
+  const txns = []; let i=0, j=0;
+  while (i<pos.length && j<neg.length) {
+    const amt = Math.min(pos[i].a, neg[j].a);
+    if (amt > 0.01) txns.push({ from: neg[j].id, to: pos[i].id, amount: Math.round(amt*100)/100 });
+    pos[i].a -= amt; neg[j].a -= amt;
+    if (pos[i].a < 0.01) i++; if (neg[j].a < 0.01) j++;
   }
-  return{txns,bal};
+  return { txns, bal };
 }
 
-// ─── SHARED UI ────────────────────────────────────────────────────────────────
-function Card({children,style,onClick}){return<div onClick={onClick} style={{background:C.card,borderRadius:12,overflow:"hidden",cursor:onClick?"pointer":"default",...style}}>{children}</div>;}
-function SecHeader({title}){return<div style={{padding:"0 4px",marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:C.secondary,textTransform:"uppercase",letterSpacing:.6}}>{title}</span></div>;}
-function Pill({label,color}){const c=color||C.primary;return<span style={{display:"inline-flex",alignItems:"center",background:`${c}18`,color:c,borderRadius:100,padding:"3px 10px",fontSize:12,fontWeight:500}}>{label}</span>;}
-function Avatar({name,id,size=36}){return<div style={{width:size,height:size,borderRadius:"50%",background:avatarClr(id),display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size*.38,fontWeight:700,flexShrink:0}}>{initials(name)}</div>;}
-function Chevron({down}){return<svg width="10" height="6" viewBox="0 0 10 6" style={{transform:down?"rotate(180deg)":"none",transition:"0.2s ease"}}><path d="M1 1l4 4 4-4" stroke={C.tertiary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>;}
-function ChevronRight(){return<svg width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1 1l6 5.5L1 12" stroke={C.tertiary} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>;}
-function Sep({left=0}){return<div style={{height:1,background:C.separator,marginLeft:left}}/>;}
-function Input({label,value,onChange,type="text",placeholder,autoFocus}){
-  return<div style={{marginBottom:16}}>{label&&<div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:6}}>{label}</div>}<input autoFocus={autoFocus} type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.separator}`,background:C.fill,fontSize:15,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/></div>;
-}
-function Btn({label,onClick,variant="primary",small,disabled,full=true,loading}){
-  const bg=disabled?C.fill:variant==="primary"?C.primary:variant==="danger"?C.danger:C.fill;
-  const fg=disabled?C.tertiary:variant==="secondary"?C.label:"white";
-  return<button onClick={disabled||loading?undefined:onClick} style={{background:bg,color:fg,border:"none",borderRadius:10,padding:small?"8px 16px":"14px",fontSize:small?13:15,fontWeight:600,cursor:disabled||loading?"default":"pointer",width:full?"100%":"auto",fontFamily:"inherit",opacity:disabled?.6:1}}>{loading?"A guardar...":label}</button>;
-}
-function Modal({title,onClose,children}){
-  return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:1000,backdropFilter:"blur(10px)"}}><div style={{background:C.card,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:640,maxHeight:"88vh",overflow:"auto",paddingBottom:32}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.separator}`,position:"sticky",top:0,background:C.card,zIndex:1}}><span style={{fontSize:17,fontWeight:700,color:C.label}}>{title}</span><button onClick={onClose} style={{background:C.fill,border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",color:C.secondary,fontSize:19,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>×</button></div><div style={{padding:"16px 20px"}}>{children}</div></div></div>;
-}
-function Empty({emoji,title,subtitle}){return<div style={{textAlign:"center",padding:"60px 0",color:C.secondary}}><div style={{fontSize:44,marginBottom:12}}>{emoji}</div><div style={{fontSize:16,fontWeight:600,color:C.label}}>{title}</div>{subtitle&&<div style={{fontSize:14,marginTop:4}}>{subtitle}</div>}</div>;}
-function Spinner(){return<div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"-apple-system,sans-serif"}}><div style={{width:36,height:36,borderRadius:"50%",border:`3px solid ${C.fill}`,borderTopColor:C.primary,animation:"spin .8s linear infinite"}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style><div style={{fontSize:14,color:C.secondary}}>A carregar...</div></div>;}
+// ─── UI ATOMS ────────────────────────────────────────────────────────────────
+const Card = ({children,style,onClick}) => <div onClick={onClick} style={{background:C.card,borderRadius:12,overflow:"hidden",cursor:onClick?"pointer":"default",...style}}>{children}</div>;
+const SH   = ({title}) => <div style={{padding:"0 4px",marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6}}>{title}</span></div>;
+const Pill = ({label,color}) => { const c=color||C.primary; return <span style={{display:"inline-flex",background:`${c}18`,color:c,borderRadius:100,padding:"3px 10px",fontSize:12,fontWeight:500}}>{label}</span>; };
+const Av   = ({name,id,size=36}) => <div style={{width:size,height:size,borderRadius:"50%",background:aclr(id),display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size*.38,fontWeight:700,flexShrink:0}}>{initials(name)}</div>;
+const Chev = ({down}) => <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:down?"rotate(180deg)":"none",transition:".2s"}}><path d="M1 1l4 4 4-4" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>;
+const ChR  = () => <svg width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1 1l6 5.5L1 12" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+const Line = ({l=0}) => <div style={{height:1,background:C.sep,marginLeft:l}}/>;
 
-// ─── JOIN SCREEN ─────────────────────────────────────────────────────────────
-function JoinScreen({onJoin,onCreate}){
-  const [code,setCode]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);
-  const handleJoin=async()=>{const c=code.toUpperCase().trim();if(!c)return;setBusy(true);setError("");const ok=await onJoin(c);if(!ok)setError("Código não encontrado. Verifica e tenta de novo.");setBusy(false);};
-  return(
+const Inp = ({label,value,onChange,type="text",placeholder,autoFocus}) => (
+  <div style={{marginBottom:16}}>
+    {label && <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:6}}>{label}</div>}
+    <input autoFocus={autoFocus} type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+      style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.sep}`,background:C.fill,fontSize:15,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+  </div>
+);
+
+const Btn = ({label,onClick,variant="primary",small,disabled,full=true,loading}) => {
+  const bg = disabled ? C.fill : variant==="primary" ? C.primary : variant==="danger" ? C.danger : C.fill;
+  const fg = disabled ? C.ter : variant==="secondary" ? C.label : "white";
+  return <button onClick={disabled||loading ? undefined : onClick}
+    style={{background:bg,color:fg,border:"none",borderRadius:10,padding:small?"8px 16px":"14px",fontSize:small?13:15,fontWeight:600,cursor:disabled||loading?"default":"pointer",width:full?"100%":"auto",fontFamily:"inherit",opacity:disabled?.6:1}}>
+    {loading ? "A guardar..." : label}
+  </button>;
+};
+
+const Modal = ({title,onClose,children}) => (
+  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:1000,backdropFilter:"blur(10px)"}}>
+    <div style={{background:C.card,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:640,maxHeight:"88vh",overflow:"auto",paddingBottom:32}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.sep}`,position:"sticky",top:0,background:C.card,zIndex:1}}>
+        <span style={{fontSize:17,fontWeight:700,color:C.label}}>{title}</span>
+        <button onClick={onClose} style={{background:C.fill,border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",color:C.sec,fontSize:19,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}>×</button>
+      </div>
+      <div style={{padding:"16px 20px"}}>{children}</div>
+    </div>
+  </div>
+);
+
+const Empty = ({emoji,title,subtitle}) => (
+  <div style={{textAlign:"center",padding:"60px 0",color:C.sec}}>
+    <div style={{fontSize:44,marginBottom:12}}>{emoji}</div>
+    <div style={{fontSize:16,fontWeight:600,color:C.label}}>{title}</div>
+    {subtitle && <div style={{fontSize:14,marginTop:4}}>{subtitle}</div>}
+  </div>
+);
+
+const Loader = () => (
+  <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"-apple-system,sans-serif"}}>
+    <div style={{width:36,height:36,borderRadius:"50%",border:`3px solid ${C.fill}`,borderTopColor:C.primary,animation:"spin .8s linear infinite"}}/>
+    <div style={{fontSize:14,color:C.sec}}>A carregar...</div>
+  </div>
+);
+
+// ─── JOIN ────────────────────────────────────────────────────────────────────
+function JoinScreen({ onJoin, onCreate }) {
+  const [code, setCode] = useState("");
+  const [err,  setErr]  = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const go = async () => {
+    const c = code.toUpperCase().trim();
+    if (!c) return;
+    setBusy(true); setErr("");
+    const ok = await onJoin(c);
+    if (!ok) setErr("Código não encontrado.");
+    setBusy(false);
+  };
+
+  return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{width:"100%",maxWidth:360}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <div style={{fontSize:64,marginBottom:12}}>🏖️</div>
           <div style={{fontSize:28,fontWeight:800,color:C.label}}>Férias em Grupo</div>
-          <div style={{fontSize:15,color:C.secondary,marginTop:6}}>Organiza tudo num só sítio</div>
+          <div style={{fontSize:15,color:C.sec,marginTop:6}}>Organiza tudo num só sítio</div>
         </div>
         <Card style={{padding:20,marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:C.secondary,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Entrar numa viagem</div>
-          <Input value={code} onChange={v=>{setCode(v.toUpperCase());setError("");}} placeholder="Código ex. A3F9B2" autoFocus/>
-          {error&&<div style={{fontSize:13,color:C.danger,marginBottom:12,marginTop:-8}}>⚠️ {error}</div>}
-          <Btn label="Entrar" onClick={handleJoin} disabled={!code.trim()} loading={busy}/>
+          <div style={{fontSize:13,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Entrar numa viagem</div>
+          <Inp value={code} onChange={v=>{setCode(v.toUpperCase());setErr("");}} placeholder="Código ex. A3F9B2" autoFocus/>
+          {err && <div style={{fontSize:13,color:C.danger,marginBottom:12,marginTop:-8}}>⚠️ {err}</div>}
+          <Btn label="Entrar" onClick={go} disabled={!code.trim()} loading={busy}/>
         </Card>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}><div style={{flex:1,height:1,background:C.separator}}/><span style={{fontSize:13,color:C.tertiary}}>ou</span><div style={{flex:1,height:1,background:C.separator}}/></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+          <div style={{flex:1,height:1,background:C.sep}}/><span style={{fontSize:13,color:C.ter}}>ou</span><div style={{flex:1,height:1,background:C.sep}}/>
+        </div>
         <Btn label="✨ Criar nova viagem" onClick={onCreate} variant="secondary"/>
-        <div style={{textAlign:"center",marginTop:24,fontSize:12,color:C.tertiary,lineHeight:1.6}}>Partilha o código de 6 letras com o grupo<br/>para que todos acedam à mesma viagem</div>
+        <div style={{textAlign:"center",marginTop:24,fontSize:12,color:C.ter,lineHeight:1.6}}>
+          Partilha o código de 6 letras<br/>para o grupo entrar na mesma viagem
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── TAB: VIAGEM ─────────────────────────────────────────────────────────────
-function ViagemTab({trip,setTrip,people,expenses,onLeave}){
-  const adults=people.filter(p=>p.type==="adult").length;
-  const children=people.filter(p=>p.type==="child").length;
-  const days=getDays(trip.startDate,trip.endDate).length;
-  const total=expenses.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const budget=parseFloat(trip.budget||0);
-  const pct=budget>0?Math.min(100,(total/budget)*100):0;
-  const over=budget>0&&total>budget;
-  return(
+// ─── TAB VIAGEM ───────────────────────────────────────────────────────────────
+function TabViagem({ trip, setTrip, peopleList, expList, onLeave }) {
+  const nAdults   = peopleList.filter(p=>p.type==="adult").length;
+  const nChildren = peopleList.filter(p=>p.type==="child").length;
+  const nDays     = getDays(trip.startDate, trip.endDate).length;
+  const total     = expList.reduce((s,e)=>s+ +e.amount,0);
+  const budget    = +(trip.budget||0);
+  const pct       = budget>0 ? Math.min(100,total/budget*100) : 0;
+  const over      = budget>0 && total>budget;
+
+  return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{marginBottom:24}}>
-        <input value={trip.name||""} onChange={e=>setTrip(t=>({...t,name:e.target.value}))} style={{fontSize:30,fontWeight:800,color:C.label,background:"transparent",border:"none",outline:"none",width:"100%",fontFamily:"inherit",marginBottom:2}} placeholder="Nome das Férias"/>
-        <div style={{fontSize:15,color:C.secondary}}>{trip.location||"Localização por definir"}{trip.startDate&&trip.endDate?` · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}`:""}</div>
+        <input value={trip.name||""} onChange={e=>setTrip(t=>({...t,name:e.target.value}))}
+          style={{fontSize:30,fontWeight:800,color:C.label,background:"transparent",border:"none",outline:"none",width:"100%",fontFamily:"inherit"}} placeholder="Nome das Férias"/>
+        <div style={{fontSize:15,color:C.sec}}>
+          {trip.location||"Localização por definir"}
+          {trip.startDate&&trip.endDate ? ` · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}` : ""}
+        </div>
       </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
-        {[{l:"Adultos",v:adults||"—",c:C.primary},{l:"Crianças",v:children||"—",c:C.warning},{l:"Dias",v:days||"—",c:C.success},{l:"Despesas",v:total>0?currency(total):"—",c:over?C.danger:C.label}].map(s=>(
-          <Card key={s.l} style={{padding:"14px 16px"}}><div style={{fontSize:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div><div style={{fontSize:12,color:C.secondary,marginTop:4}}>{s.l}</div></Card>
+        {[
+          {l:"Adultos", v:nAdults||"—",  c:C.primary},
+          {l:"Crianças",v:nChildren||"—",c:C.warning},
+          {l:"Dias",    v:nDays||"—",    c:C.success},
+          {l:"Despesas",v:total>0?money(total):"—", c:over?C.danger:C.label},
+        ].map(s=>(
+          <Card key={s.l} style={{padding:"14px 16px"}}>
+            <div style={{fontSize:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
+            <div style={{fontSize:12,color:C.sec,marginTop:4}}>{s.l}</div>
+          </Card>
         ))}
       </div>
-      {budget>0&&(
+
+      {budget>0 && (
         <Card style={{padding:"14px 16px",marginBottom:22}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,color:C.secondary,fontWeight:500}}>Orçamento</span><span style={{fontSize:13,fontWeight:600,color:over?C.danger:C.label}}>{currency(total)} / {currency(budget)}</span></div>
-          <div style={{height:6,background:C.fill,borderRadius:100,overflow:"hidden"}}><div style={{height:"100%",borderRadius:100,background:over?C.danger:C.primary,width:`${pct}%`,transition:"width .4s ease"}}/></div>
-          {over&&<div style={{fontSize:12,color:C.danger,marginTop:6,fontWeight:500}}>⚠️ Orçamento ultrapassado em {currency(total-budget)}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontSize:13,color:C.sec}}>Orçamento</span>
+            <span style={{fontSize:13,fontWeight:600,color:over?C.danger:C.label}}>{money(total)} / {money(budget)}</span>
+          </div>
+          <div style={{height:6,background:C.fill,borderRadius:100,overflow:"hidden"}}>
+            <div style={{height:"100%",borderRadius:100,background:over?C.danger:C.primary,width:`${pct}%`,transition:"width .4s"}}/>
+          </div>
+          {over && <div style={{fontSize:12,color:C.danger,marginTop:6}}>⚠️ Ultrapassado em {money(total-budget)}</div>}
         </Card>
       )}
-      <SecHeader title="Partilhar Viagem"/>
+
+      <SH title="Código de partilha"/>
       <Card style={{padding:"14px 16px",marginBottom:22}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontSize:13,color:C.secondary}}>Código de acesso</div><div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:C.primary,marginTop:4}}>{trip.shareCode}</div></div>
-          <button onClick={()=>navigator.clipboard?.writeText(trip.shareCode)} style={{background:C.primaryBg,color:C.primary,border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
+          <div>
+            <div style={{fontSize:13,color:C.sec}}>Código de acesso</div>
+            <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:C.primary,marginTop:4}}>{trip.shareCode}</div>
+          </div>
+          <button onClick={()=>navigator.clipboard?.writeText(trip.shareCode)}
+            style={{background:C.pBg,color:C.primary,border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            Copiar
+          </button>
         </div>
-        <div style={{fontSize:12,color:C.secondary,marginTop:10}}>Partilha este código com o grupo para entrarem na mesma viagem</div>
+        <div style={{fontSize:12,color:C.sec,marginTop:10}}>Partilha com o grupo para entrarem na mesma viagem</div>
       </Card>
-      <SecHeader title="Detalhes"/>
+
+      <SH title="Detalhes"/>
       <Card style={{padding:"2px 16px",marginBottom:22}}>
-        {[{label:"Localização",key:"location",type:"text",placeholder:"Algarve, Douro..."},{label:"Início",key:"startDate",type:"date"},{label:"Fim",key:"endDate",type:"date"},{label:"Orçamento €",key:"budget",type:"number",placeholder:"0"}].map((f,i,arr)=>(
+        {[
+          {label:"Localização",key:"location",type:"text",ph:"Algarve, Douro..."},
+          {label:"Início",     key:"startDate",type:"date"},
+          {label:"Fim",        key:"endDate",  type:"date"},
+          {label:"Orçamento €",key:"budget",   type:"number",ph:"0"},
+        ].map((f,i,arr)=>(
           <div key={f.key}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 0"}}>
               <span style={{fontSize:15,color:C.label}}>{f.label}</span>
-              <input type={f.type} value={trip[f.key]||""} onChange={e=>setTrip(t=>({...t,[f.key]:e.target.value}))} placeholder={f.placeholder||""} style={{border:"none",background:"transparent",outline:"none",fontSize:15,color:C.secondary,textAlign:"right",fontFamily:"inherit",width:170}}/>
+              <input type={f.type} value={trip[f.key]||""} onChange={e=>setTrip(t=>({...t,[f.key]:e.target.value}))}
+                placeholder={f.ph||""} style={{border:"none",background:"transparent",outline:"none",fontSize:15,color:C.sec,textAlign:"right",fontFamily:"inherit",width:170}}/>
             </div>
-            {i<arr.length-1&&<Sep/>}
+            {i<arr.length-1 && <Line/>}
           </div>
         ))}
       </Card>
-      <SecHeader title="Notas"/>
+
+      <SH title="Notas"/>
       <Card style={{padding:"14px 16px",marginBottom:22}}>
-        <textarea value={trip.notes||""} onChange={e=>setTrip(t=>({...t,notes:e.target.value}))} placeholder="Regras da casa, contactos, endereço, horários..." rows={4} style={{width:"100%",border:"none",background:"transparent",outline:"none",resize:"none",fontFamily:"inherit",fontSize:15,color:C.label,lineHeight:1.5,boxSizing:"border-box"}}/>
+        <textarea value={trip.notes||""} onChange={e=>setTrip(t=>({...t,notes:e.target.value}))}
+          placeholder="Regras da casa, contactos, endereço..." rows={4}
+          style={{width:"100%",border:"none",background:"transparent",outline:"none",resize:"none",fontFamily:"inherit",fontSize:15,color:C.label,lineHeight:1.5,boxSizing:"border-box"}}/>
       </Card>
-      <button onClick={onLeave} style={{background:"none",border:"none",color:C.danger,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 0",marginBottom:32}}>Sair desta viagem</button>
+
+      <button onClick={onLeave} style={{background:"none",border:"none",color:C.danger,fontSize:14,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginBottom:32}}>
+        Sair desta viagem
+      </button>
     </div>
   );
 }
 
-// ─── TAB: PESSOAS ─────────────────────────────────────────────────────────────
-function PessoasTab({tripId,people,reload}){
-  const [modal,setModal]=useState(false);const [editId,setEditId]=useState(null);
-  const [form,setForm]=useState({name:"",type:"adult",dietary:[]});const [busy,setBusy]=useState(false);
-  const open=(p=null)=>{setForm(p?{name:p.name,type:p.type,dietary:[...(p.dietary||[])]}:{name:"",type:"adult",dietary:[]});setEditId(p?.id||null);setModal(true);};
-  const save=async()=>{
-    if(!form.name.trim())return;setBusy(true);
-    if(editId) await people_ref(tripId).doc(editId).update(form);
-    else await people_ref(tripId).add({...form,createdAt:ts()});
-    setBusy(false);setModal(false);
+// ─── TAB PESSOAS ──────────────────────────────────────────────────────────────
+function TabPessoas({ tripId, peopleList }) {
+  const [modal, setModal] = useState(false);
+  const [editId,setEditId]= useState(null);
+  const [form,  setForm]  = useState({name:"",type:"adult",dietary:[]});
+  const [busy,  setBusy]  = useState(false);
+
+  const open = (p=null) => {
+    setForm(p ? {name:p.name,type:p.type,dietary:[...(p.dietary||[])]} : {name:"",type:"adult",dietary:[]});
+    setEditId(p?.id||null); setModal(true);
   };
-  const del=async()=>{setBusy(true);await people_ref(tripId).doc(editId).delete();setBusy(false);setModal(false);};
-  const toggleD=d=>setForm(f=>({...f,dietary:f.dietary.includes(d)?f.dietary.filter(x=>x!==d):[...f.dietary,d]}));
-  const adults=people.filter(p=>p.type==="adult");const children=people.filter(p=>p.type==="child");
-  return(
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setBusy(true);
+    if (editId) await FS.people(tripId).doc(editId).update(form);
+    else        await FS.people(tripId).add({...form, createdAt: FS.ts()});
+    setBusy(false); setModal(false);
+  };
+  const del = async () => {
+    setBusy(true);
+    await FS.people(tripId).doc(editId).delete();
+    setBusy(false); setModal(false);
+  };
+  const toggleD = d => setForm(f=>({...f,dietary: f.dietary.includes(d) ? f.dietary.filter(x=>x!==d) : [...f.dietary,d]}));
+
+  const adults   = peopleList.filter(p=>p.type==="adult");
+  const children = peopleList.filter(p=>p.type==="child");
+
+  return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-        <div><div style={{fontSize:22,fontWeight:800}}>{people.length} Pessoa{people.length!==1?"s":""}</div><div style={{fontSize:13,color:C.secondary,marginTop:2}}>{adults.length} adulto{adults.length!==1?"s":""} · {children.length} criança{children.length!==1?"s":""}</div></div>
+        <div>
+          <div style={{fontSize:22,fontWeight:800}}>{peopleList.length} Pessoa{peopleList.length!==1?"s":""}</div>
+          <div style={{fontSize:13,color:C.sec,marginTop:2}}>{adults.length} adulto{adults.length!==1?"s":""} · {children.length} criança{children.length!==1?"s":""}</div>
+        </div>
         <button onClick={()=>open()} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
       </div>
-      {[["adult","Adultos",adults],["child","Crianças",children]].map(([,title,group])=>{
-        if(!group.length)return null;
-        return<div key={title} style={{marginBottom:20}}><SecHeader title={title}/><Card>{group.map((p,i)=>(
-          <div key={p.id}><div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer"}} onClick={()=>open(p)}><Avatar name={p.name} id={p.id}/><div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div>{p.dietary?.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>{p.dietary.map(d=><Pill key={d} label={d}/>)}</div>}</div><ChevronRight/></div>{i<group.length-1&&<Sep left={64}/>}</div>
-        ))}</Card></div>;
+
+      {[["Adultos",adults],["Crianças",children]].map(([title,group]) => {
+        if (!group.length) return null;
+        return (
+          <div key={title} style={{marginBottom:20}}>
+            <SH title={title}/>
+            <Card>
+              {group.map((p,i) => (
+                <div key={p.id}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer"}} onClick={()=>open(p)}>
+                    <Av name={p.name} id={p.id}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div>
+                      {p.dietary?.length>0 && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>{p.dietary.map(d=><Pill key={d} label={d}/>)}</div>}
+                    </div>
+                    <ChR/>
+                  </div>
+                  {i<group.length-1 && <Line l={64}/>}
+                </div>
+              ))}
+            </Card>
+          </div>
+        );
       })}
-      {people.length===0&&<Empty emoji="👥" title="Adiciona o grupo" subtitle="Quem vai nestas férias?"/>}
-      {modal&&(
+
+      {peopleList.length===0 && <Empty emoji="👥" title="Adiciona o grupo" subtitle="Quem vai nestas férias?"/>}
+
+      {modal && (
         <Modal title={editId?"Editar Pessoa":"Nova Pessoa"} onClose={()=>setModal(false)}>
-          <Input label="Nome" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Nome completo" autoFocus/>
-          <div style={{marginBottom:16}}><div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:8}}>Tipo</div><div style={{display:"flex",gap:8}}>{[["adult","👤 Adulto"],["child","🧒 Criança"]].map(([t,l])=><button key={t} onClick={()=>setForm(f=>({...f,type:t}))} style={{flex:1,padding:11,borderRadius:10,border:`2px solid ${form.type===t?C.primary:C.separator}`,background:form.type===t?C.primaryBg:"transparent",color:form.type===t?C.primary:C.label,fontWeight:600,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>)}</div></div>
-          <div style={{marginBottom:20}}><div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:8}}>Restrições Alimentares</div><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{DIETARY_OPTIONS.map(d=><button key={d} onClick={()=>toggleD(d)} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.dietary.includes(d)?C.primary:C.separator}`,background:form.dietary.includes(d)?C.primaryBg:"transparent",color:form.dietary.includes(d)?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{d}</button>)}</div></div>
+          <Inp label="Nome" value={form.name} onChange={v=>setForm(f=>({...f,name:v}))} placeholder="Nome completo" autoFocus/>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Tipo</div>
+            <div style={{display:"flex",gap:8}}>
+              {[["adult","👤 Adulto"],["child","🧒 Criança"]].map(([t,l])=>(
+                <button key={t} onClick={()=>setForm(f=>({...f,type:t}))} style={{flex:1,padding:11,borderRadius:10,border:`2px solid ${form.type===t?C.primary:C.sep}`,background:form.type===t?C.pBg:"transparent",color:form.type===t?C.primary:C.label,fontWeight:600,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Restrições Alimentares</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+              {DIETARY.map(d=>(
+                <button key={d} onClick={()=>toggleD(d)} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.dietary.includes(d)?C.primary:C.sep}`,background:form.dietary.includes(d)?C.pBg:"transparent",color:form.dietary.includes(d)?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{d}</button>
+              ))}
+            </div>
+          </div>
           <Btn label={editId?"Guardar Alterações":"Adicionar Pessoa"} onClick={save} loading={busy} disabled={!form.name.trim()}/>
-          {editId&&<div style={{marginTop:8}}><Btn label="Remover do Grupo" variant="danger" onClick={del} loading={busy}/></div>}
+          {editId && <div style={{marginTop:8}}><Btn label="Remover do Grupo" variant="danger" onClick={del} loading={busy}/></div>}
         </Modal>
       )}
     </div>
   );
 }
-// helper inline para evitar clash com variavel meals
-function people_ref(tid){return db.collection("trips").doc(tid).collection("people");}
 
-// ─── TAB: MENU ───────────────────────────────────────────────────────────────
-function MenuTab({trip,mealsList,people}){
-  const days=getDays(trip.startDate,trip.endDate);
-  const [expanded,setExpanded]=useState(null);const [editing,setEditing]=useState(null);const [txt,setTxt]=useState("");
-  const getMeal=(date,key)=>(mealsList.find(m=>m.id===date)||{})[key]||"";
-  const saveMeal=async(date,key,val)=>{await db.collection("trips").doc(trip.id).collection("meals").doc(date).set({[key]:val},{merge:true});setEditing(null);};
-  const allRestrictions=[...new Set(people.flatMap(p=>p.dietary||[]))];
-  if(!days.length)return<Empty emoji="📅" title="Datas não definidas" subtitle="Define as datas no separador Viagem"/>;
-  return(
+// ─── TAB MENU ─────────────────────────────────────────────────────────────────
+function TabMenu({ trip, mealDocs, peopleList }) {
+  const days = getDays(trip.startDate, trip.endDate);
+  const [open,  setOpen]  = useState(null);
+  const [ed,    setEd]    = useState(null);
+  const [txt,   setTxt]   = useState("");
+
+  const getVal = (date,key) => (mealDocs.find(m=>m.id===date)||{})[key]||"";
+  const saveVal = async (date,key,val) => {
+    await FS.meals(trip.id).doc(date).set({[key]:val},{merge:true});
+    setEd(null);
+  };
+
+  const allR = [...new Set(peopleList.flatMap(p=>p.dietary||[]))];
+  if (!days.length) return <Empty emoji="📅" title="Datas não definidas" subtitle="Define as datas no separador Viagem"/>;
+
+  return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{marginBottom:20}}>
         <div style={{fontSize:22,fontWeight:800}}>{days.length} Dias</div>
-        {allRestrictions.length>0&&<div style={{marginTop:8,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:12,color:C.secondary,fontWeight:500}}>⚠️ Atenção:</span>{allRestrictions.map(r=><Pill key={r} label={r} color={C.warning}/>)}</div>}
-      </div>
-      {days.map((date,idx)=>{
-        const isOpen=expanded===date;const filled=MEAL_TYPES.filter(m=>getMeal(date,m.key)).length;
-        return<Card key={date} style={{marginBottom:10}}>
-          <div onClick={()=>setExpanded(isOpen?null:date)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",cursor:"pointer"}}>
-            <div><div style={{fontSize:15,fontWeight:700,color:C.label}}>Dia {idx+1} · {fmtDate(date)}</div><div style={{fontSize:12,color:C.secondary,marginTop:3}}>{filled===4?<span style={{color:C.success}}>✓ Completo</span>:`${filled}/4 refeições planeadas`}</div></div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>{filled===4&&<div style={{width:8,height:8,borderRadius:"50%",background:C.success}}/>}<Chevron down={isOpen}/></div>
+        {allR.length>0 && (
+          <div style={{marginTop:8,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:12,color:C.sec,fontWeight:500}}>⚠️ Atenção:</span>
+            {allR.map(r=><Pill key={r} label={r} color={C.warning}/>)}
           </div>
-          {isOpen&&<div style={{borderTop:`1px solid ${C.separator}`}}>
-            {MEAL_TYPES.map((meal,i)=>{
-              const val=getMeal(date,meal.key);const isEd=editing?.date===date&&editing?.key===meal.key;
-              return<div key={meal.key}>
-                <div style={{padding:"12px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
-                  <span style={{fontSize:22,marginTop:1,flexShrink:0}}>{meal.emoji}</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11,fontWeight:600,color:C.secondary,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>{meal.label}</div>
-                    {isEd?(
-                      <div><textarea autoFocus value={txt} onChange={e=>setTxt(e.target.value)} rows={2} placeholder={`O que há ao ${meal.label.toLowerCase()}?`} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${C.primary}`,background:C.fill,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",color:C.label}}/>
-                      <div style={{display:"flex",gap:8,marginTop:8}}><Btn small label="Guardar" onClick={()=>saveMeal(date,meal.key,txt)} full={false}/><Btn small label="Cancelar" variant="secondary" onClick={()=>setEditing(null)} full={false}/></div></div>
-                    ):(
-                      <div onClick={()=>{setTxt(val);setEditing({date,key:meal.key});}} style={{fontSize:14,color:val?C.label:C.tertiary,cursor:"pointer",lineHeight:1.5,minHeight:20}}>{val||`Adicionar ${meal.label.toLowerCase()}...`}</div>
-                    )}
-                  </div>
+        )}
+      </div>
+
+      {days.map((date,idx) => {
+        const isOpen = open===date;
+        const filled = MEALS.filter(m=>getVal(date,m.key)).length;
+        return (
+          <Card key={date} style={{marginBottom:10}}>
+            <div onClick={()=>setOpen(isOpen?null:date)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",cursor:"pointer"}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:C.label}}>Dia {idx+1} · {fmtDate(date)}</div>
+                <div style={{fontSize:12,color:C.sec,marginTop:3}}>
+                  {filled===4 ? <span style={{color:C.success}}>✓ Completo</span> : `${filled}/4 refeições planeadas`}
                 </div>
-                {i<MEAL_TYPES.length-1&&<Sep left={50}/>}
-              </div>;
-            })}
-          </div>}
-        </Card>;
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {filled===4 && <div style={{width:8,height:8,borderRadius:"50%",background:C.success}}/>}
+                <Chev down={isOpen}/>
+              </div>
+            </div>
+
+            {isOpen && (
+              <div style={{borderTop:`1px solid ${C.sep}`}}>
+                {MEALS.map((meal,i) => {
+                  const val  = getVal(date,meal.key);
+                  const isEd = ed?.date===date && ed?.key===meal.key;
+                  return (
+                    <div key={meal.key}>
+                      <div style={{padding:"12px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
+                        <span style={{fontSize:22,marginTop:1,flexShrink:0}}>{meal.emoji}</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>{meal.label}</div>
+                          {isEd ? (
+                            <div>
+                              <textarea autoFocus value={txt} onChange={e=>setTxt(e.target.value)} rows={2}
+                                placeholder={`O que há ao ${meal.label.toLowerCase()}?`}
+                                style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${C.primary}`,background:C.fill,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",color:C.label}}/>
+                              <div style={{display:"flex",gap:8,marginTop:8}}>
+                                <Btn small label="Guardar" onClick={()=>saveVal(date,meal.key,txt)} full={false}/>
+                                <Btn small label="Cancelar" variant="secondary" onClick={()=>setEd(null)} full={false}/>
+                              </div>
+                            </div>
+                          ) : (
+                            <div onClick={()=>{setTxt(val);setEd({date,key:meal.key});}} style={{fontSize:14,color:val?C.label:C.ter,cursor:"pointer",lineHeight:1.5,minHeight:20}}>
+                              {val||`Adicionar ${meal.label.toLowerCase()}...`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {i<MEALS.length-1 && <Line l={50}/>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        );
       })}
     </div>
   );
 }
 
-// ─── TAB: DESPESAS ───────────────────────────────────────────────────────────
-function DespesasTab({tripId,expsList,people}){
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState({description:"",amount:"",paidBy:"",category:"supermercado",splitWith:[]});
-  const [busy,setBusy]=useState(false);
-  const openAdd=()=>{setForm({description:"",amount:"",paidBy:people[0]?.id||"",category:"supermercado",splitWith:people.map(p=>p.id)});setModal(true);};
-  const save=async()=>{
-    if(!form.description||!form.amount||!form.paidBy||!form.splitWith.length)return;
-    setBusy(true);
-    await db.collection("trips").doc(tripId).collection("expenses").add({...form,amount:parseFloat(form.amount),date:today(),createdAt:ts()});
-    setBusy(false);setModal(false);
+// ─── TAB DESPESAS ─────────────────────────────────────────────────────────────
+function TabDespesas({ tripId, expList, peopleList }) {
+  const [modal, setModal] = useState(false);
+  const [form,  setForm]  = useState({description:"",amount:"",paidBy:"",category:"supermercado",splitWith:[]});
+  const [busy,  setBusy]  = useState(false);
+
+  const openAdd = () => {
+    setForm({description:"",amount:"",paidBy:peopleList[0]?.id||"",category:"supermercado",splitWith:peopleList.map(p=>p.id)});
+    setModal(true);
   };
-  const del=async id=>await db.collection("trips").doc(tripId).collection("expenses").doc(id).delete();
-  const toggleP=id=>setForm(f=>({...f,splitWith:f.splitWith.includes(id)?f.splitWith.filter(x=>x!==id):[...f.splitWith,id]}));
-  const total=expsList.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const byCat=EXPENSE_CATS.map(c=>({...c,t:expsList.filter(e=>e.category===c.id).reduce((s,e)=>s+parseFloat(e.amount||0),0)})).filter(c=>c.t>0);
-  return(
+  const save = async () => {
+    if (!form.description||!form.amount||!form.paidBy||!form.splitWith.length) return;
+    setBusy(true);
+    await FS.expenses(tripId).add({...form, amount:+form.amount, date:todayStr(), createdAt:FS.ts()});
+    setBusy(false); setModal(false);
+  };
+  const del = id => FS.expenses(tripId).doc(id).delete();
+  const toggleP = id => setForm(f=>({...f,splitWith: f.splitWith.includes(id) ? f.splitWith.filter(x=>x!==id) : [...f.splitWith,id]}));
+
+  const total = expList.reduce((s,e)=>s+ +e.amount,0);
+  const byCat = CATS.map(c=>({...c,t:expList.filter(e=>e.category===c.id).reduce((s,e)=>s+ +e.amount,0)})).filter(c=>c.t>0);
+
+  return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:22}}>
-        <div><div style={{fontSize:30,fontWeight:800,color:C.label}}>{currency(total)}</div><div style={{fontSize:13,color:C.secondary,marginTop:2}}>{expsList.length} despesa{expsList.length!==1?"s":""} registada{expsList.length!==1?"s":""}</div></div>
-        {people.length>0&&<button onClick={openAdd} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>}
+        <div>
+          <div style={{fontSize:30,fontWeight:800,color:C.label}}>{money(total)}</div>
+          <div style={{fontSize:13,color:C.sec,marginTop:2}}>{expList.length} despesa{expList.length!==1?"s":""}</div>
+        </div>
+        {peopleList.length>0 && (
+          <button onClick={openAdd} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+        )}
       </div>
-      {byCat.length>0&&<><SecHeader title="Por categoria"/><div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>{byCat.map(c=><div key={c.id} style={{background:C.card,borderRadius:12,padding:"12px 14px",minWidth:90,flexShrink:0}}><div style={{fontSize:22}}>{c.emoji}</div><div style={{fontSize:13,fontWeight:700,color:C.label,marginTop:5}}>{currency(c.t)}</div><div style={{fontSize:11,color:C.secondary,marginTop:1}}>{c.label}</div></div>)}</div></>}
-      {expsList.length>0?(<><SecHeader title="Histórico"/>
-        <Card style={{marginBottom:20}}>{[...expsList].reverse().map((e,i,arr)=>{
-          const payer=people.find(p=>p.id===e.paidBy);const cat=EXPENSE_CATS.find(c=>c.id===e.category);
-          const share=e.splitWith?.length?parseFloat(e.amount)/e.splitWith.length:0;
-          return<div key={e.id}><div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px"}}>
-            <div style={{width:42,height:42,borderRadius:11,background:C.fill,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat?.emoji||"💳"}</div>
-            <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:600,color:C.label,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.description}</div><div style={{fontSize:12,color:C.secondary,marginTop:2}}>Pago por <span style={{fontWeight:600}}>{payer?.name||"?"}</span> · {e.splitWith?.length||0} pessoas · {currency(share)}/pessoa</div></div>
-            <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:15,fontWeight:700,color:C.label}}>{currency(parseFloat(e.amount))}</div><button onClick={()=>del(e.id)} style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",padding:0,marginTop:2,fontFamily:"inherit"}}>remover</button></div>
-          </div>{i<arr.length-1&&<Sep left={70}/>}</div>;
-        })}</Card>
-      </>):<Empty emoji="💶" title="Sem despesas ainda" subtitle={people.length===0?"Adiciona pessoas primeiro":"Regista a primeira despesa"}/>}
-      {modal&&<Modal title="Nova Despesa" onClose={()=>setModal(false)}>
-        <Input label="Descrição" value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="Supermercado, restaurante..."/>
-        <Input label="Valor (€)" type="number" value={form.amount} onChange={v=>setForm(f=>({...f,amount:v}))} placeholder="0.00"/>
-        <div style={{marginBottom:16}}><div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:8}}>Categoria</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{EXPENSE_CATS.map(c=><button key={c.id} onClick={()=>setForm(f=>({...f,category:c.id}))} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.category===c.id?C.primary:C.separator}`,background:form.category===c.id?C.primaryBg:"transparent",color:form.category===c.id?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{c.emoji} {c.label}</button>)}</div></div>
-        <div style={{marginBottom:16}}><div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:8}}>Quem pagou?</div><div style={{display:"flex",flexDirection:"column",gap:7}}>{people.map(p=><div key={p.id} onClick={()=>setForm(f=>({...f,paidBy:p.id}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${form.paidBy===p.id?C.primary:C.separator}`,background:form.paidBy===p.id?C.primaryBg:"transparent"}}><Avatar name={p.name} id={p.id} size={28}/><span style={{flex:1,fontSize:14,color:form.paidBy===p.id?C.primary:C.label,fontWeight:form.paidBy===p.id?700:400}}>{p.name}</span>{form.paidBy===p.id&&<span style={{fontSize:12,color:C.primary}}>✓</span>}</div>)}</div></div>
-        <div style={{marginBottom:22}}><div style={{fontSize:13,fontWeight:500,color:C.secondary,marginBottom:8}}>Dividir entre ({form.splitWith.length}/{people.length})</div><div style={{display:"flex",flexDirection:"column",gap:7}}>{people.map(p=>{const sel=form.splitWith.includes(p.id);const share=form.amount&&form.splitWith.length>0?parseFloat(form.amount)/form.splitWith.length:0;return<div key={p.id} onClick={()=>toggleP(p.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${sel?C.success:C.separator}`,background:sel?C.successBg:"transparent"}}><Avatar name={p.name} id={p.id} size={28}/><span style={{flex:1,fontSize:14,color:C.label}}>{p.name}</span>{sel&&form.amount&&<span style={{fontSize:13,fontWeight:600,color:C.success}}>{currency(share)}</span>}<div style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${sel?C.success:C.separator}`,background:sel?C.success:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}</div></div>;}}</div></div>
-        <Btn label="Adicionar Despesa" onClick={save} loading={busy} disabled={!form.description||!form.amount||!form.paidBy||!form.splitWith.length}/>
-      </Modal>}
-    </div>
-  );
-}
 
-// ─── TAB: DIVISÃO ─────────────────────────────────────────────────────────────
-function DivisaoTab({expsList,people}){
-  const {txns,bal}=useMemo(()=>simplify(expsList,people),[expsList,people]);
-  if(!people.length)return<Empty emoji="⚖️" title="Adiciona pessoas primeiro" subtitle="No separador Pessoas"/>;
-  const totalSpent=expsList.reduce((s,e)=>s+parseFloat(e.amount||0),0);
-  const maxAbs=Math.max(...Object.values(bal).map(v=>Math.abs(v)),0.01);
-  return(
-    <div style={{padding:"16px 16px 0"}}>
-      <div style={{marginBottom:22}}><div style={{fontSize:22,fontWeight:800}}>Divisão de Custos</div><div style={{fontSize:13,color:C.secondary,marginTop:2}}>Simplificado · {txns.length} transferência{txns.length!==1?"s":""} necessária{txns.length!==1?"s":""}</div></div>
-      <SecHeader title="Saldo por Pessoa"/>
-      <Card style={{marginBottom:22}}>{people.map((p,i)=>{
-        const b=bal[p.id]||0;const pos=b>=0;const pct=(Math.abs(b)/maxAbs)*100;
-        return<div key={p.id}><div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px"}}>
-          <Avatar name={p.name} id={p.id}/>
-          <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div><div style={{marginTop:7,height:5,background:C.fill,borderRadius:100,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:Math.abs(b)<0.01?C.fill:pos?C.success:C.danger,borderRadius:100,transition:"width .4s"}}/></div><div style={{fontSize:11,color:C.secondary,marginTop:3}}>{Math.abs(b)<0.01?"Contas certas":pos?`A receber ${currency(b)}`:`A pagar ${currency(Math.abs(b))}`}</div></div>
-          <div style={{fontSize:16,fontWeight:800,color:Math.abs(b)<0.01?C.tertiary:pos?C.success:C.danger,minWidth:72,textAlign:"right"}}>{Math.abs(b)<0.01?"—":(pos?"+":"")+currency(b)}</div>
-        </div>{i<people.length-1&&<Sep left={64}/>}</div>;
-      })}</Card>
-      <SecHeader title={`Transferências (${txns.length})`}/>
-      {txns.length===0?(
-        <Card style={{padding:"24px 16px",textAlign:"center",marginBottom:22}}><div style={{fontSize:36,marginBottom:8}}>🎉</div><div style={{fontSize:16,fontWeight:700,color:C.label}}>Tudo resolvido!</div><div style={{fontSize:13,color:C.secondary,marginTop:4}}>Nenhuma dívida por liquidar</div></Card>
-      ):(
-        <Card style={{marginBottom:22}}>{txns.map((t,i)=>{
-          const from=people.find(p=>p.id===t.from);const to=people.find(p=>p.id===t.to);
-          return<div key={i}><div style={{display:"flex",alignItems:"center",padding:"14px 16px",gap:10}}><Avatar name={from?.name||"?"} id={t.from} size={34}/><div style={{flex:1}}><div style={{fontSize:14,color:C.label,lineHeight:1.4}}><span style={{fontWeight:700}}>{from?.name}</span><span style={{color:C.secondary}}> deve pagar a </span><span style={{fontWeight:700}}>{to?.name}</span></div></div><Avatar name={to?.name||"?"} id={t.to} size={34}/><div style={{fontSize:17,fontWeight:800,color:C.primary,minWidth:72,textAlign:"right"}}>{currency(t.amount)}</div></div>{i<txns.length-1&&<Sep/>}</div>;
-        })}</Card>
+      {byCat.length>0 && (
+        <>
+          <SH title="Por categoria"/>
+          <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
+            {byCat.map(c=>(
+              <div key={c.id} style={{background:C.card,borderRadius:12,padding:"12px 14px",minWidth:90,flexShrink:0}}>
+                <div style={{fontSize:22}}>{c.emoji}</div>
+                <div style={{fontSize:13,fontWeight:700,color:C.label,marginTop:5}}>{money(c.t)}</div>
+                <div style={{fontSize:11,color:C.sec,marginTop:1}}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
-      {expsList.length>0&&<><SecHeader title="Resumo Global"/>
-        <Card style={{padding:"2px 16px",marginBottom:22}}>{[{l:"Total gasto",v:currency(totalSpent)},{l:"Por pessoa (média)",v:people.length?currency(totalSpent/people.length):"—"},{l:"Despesas",v:expsList.length},{l:"Transferências",v:`${txns.length} pagamento${txns.length!==1?"s":""}`}].map((r,i,arr)=>(
-          <div key={r.l}><div style={{display:"flex",justifyContent:"space-between",padding:"13px 0"}}><span style={{fontSize:15,color:C.label}}>{r.l}</span><span style={{fontSize:15,fontWeight:700,color:C.label}}>{r.v}</span></div>{i<arr.length-1&&<Sep/>}</div>
-        ))}</Card>
-      </>}
+
+      {expList.length>0 ? (
+        <>
+          <SH title="Histórico"/>
+          <Card style={{marginBottom:20}}>
+            {[...expList].reverse().map((e,i,arr)=>{
+              const payer = peopleList.find(p=>p.id===e.paidBy);
+              const cat   = CATS.find(c=>c.id===e.category);
+              const share = e.splitWith?.length ? +e.amount/e.splitWith.length : 0;
+              return (
+                <div key={e.id}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px"}}>
+                    <div style={{width:42,height:42,borderRadius:11,background:C.fill,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat?.emoji||"💳"}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:600,color:C.label,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.description}</div>
+                      <div style={{fontSize:12,color:C.sec,marginTop:2}}>Pago por <strong>{payer?.name||"?"}</strong> · {e.splitWith?.length||0} pessoas · {money(share)}/pessoa</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:15,fontWeight:700}}>{money(+e.amount)}</div>
+                      <button onClick={()=>del(e.id)} style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>remover</button>
+                    </div>
+                  </div>
+                  {i<arr.length-1 && <Line l={70}/>}
+                </div>
+              );
+            })}
+          </Card>
+        </>
+      ) : (
+        <Empty emoji="💶" title="Sem despesas ainda" subtitle={peopleList.length===0?"Adiciona pessoas primeiro":"Regista a primeira despesa"}/>
+      )}
+
+      {modal && (
+        <Modal title="Nova Despesa" onClose={()=>setModal(false)}>
+          <Inp label="Descrição" value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="Supermercado, restaurante..."/>
+          <Inp label="Valor (€)" type="number" value={form.amount} onChange={v=>setForm(f=>({...f,amount:v}))} placeholder="0.00"/>
+
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Categoria</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {CATS.map(c=>(
+                <button key={c.id} onClick={()=>setForm(f=>({...f,category:c.id}))} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.category===c.id?C.primary:C.sep}`,background:form.category===c.id?C.pBg:"transparent",color:form.category===c.id?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{c.emoji} {c.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Quem pagou?</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {peopleList.map(p=>(
+                <div key={p.id} onClick={()=>setForm(f=>({...f,paidBy:p.id}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${form.paidBy===p.id?C.primary:C.sep}`,background:form.paidBy===p.id?C.pBg:"transparent"}}>
+                  <Av name={p.name} id={p.id} size={28}/>
+                  <span style={{flex:1,fontSize:14,color:form.paidBy===p.id?C.primary:C.label,fontWeight:form.paidBy===p.id?700:400}}>{p.name}</span>
+                  {form.paidBy===p.id && <span style={{fontSize:12,color:C.primary}}>✓</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:22}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Dividir entre ({form.splitWith.length}/{peopleList.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {peopleList.map(p=>{
+                const sel   = form.splitWith.includes(p.id);
+                const share = form.amount&&form.splitWith.length ? +form.amount/form.splitWith.length : 0;
+                return (
+                  <div key={p.id} onClick={()=>toggleP(p.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.sBg:"transparent"}}>
+                    <Av name={p.name} id={p.id} size={28}/>
+                    <span style={{flex:1,fontSize:14,color:C.label}}>{p.name}</span>
+                    {sel&&form.amount && <span style={{fontSize:13,fontWeight:600,color:C.success}}>{money(share)}</span>}
+                    <div style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.success:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {sel && <span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <Btn label="Adicionar Despesa" onClick={save} loading={busy} disabled={!form.description||!form.amount||!form.paidBy||!form.splitWith.length}/>
+        </Modal>
+      )}
     </div>
   );
 }
 
-// ─── TAB ICONS ───────────────────────────────────────────────────────────────
-const TAB_ICONS={
-  viagem:  a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-  pessoas: a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
-  menu:    a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v3H3z"/><path d="M3 9h18v3H3z"/><path d="M3 15h18v3H3z"/><path d="M3 21h18"/></svg>,
-  despesas:a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
-  divisao: a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>,
+// ─── TAB DIVISÃO ──────────────────────────────────────────────────────────────
+function TabDivisao({ expList, peopleList }) {
+  const { txns, bal } = useMemo(()=>simplify(expList,peopleList),[expList,peopleList]);
+  if (!peopleList.length) return <Empty emoji="⚖️" title="Adiciona pessoas primeiro" subtitle="No separador Pessoas"/>;
+  const totalSpent = expList.reduce((s,e)=>s+ +e.amount,0);
+  const maxAbs     = Math.max(...Object.values(bal).map(v=>Math.abs(v)),0.01);
+
+  return (
+    <div style={{padding:"16px 16px 0"}}>
+      <div style={{marginBottom:22}}>
+        <div style={{fontSize:22,fontWeight:800}}>Divisão de Custos</div>
+        <div style={{fontSize:13,color:C.sec,marginTop:2}}>Simplificado · {txns.length} transferência{txns.length!==1?"s":""} necessária{txns.length!==1?"s":""}</div>
+      </div>
+
+      <SH title="Saldo por Pessoa"/>
+      <Card style={{marginBottom:22}}>
+        {peopleList.map((p,i)=>{
+          const b=bal[p.id]||0, pos=b>=0, pct=(Math.abs(b)/maxAbs)*100;
+          return (
+            <div key={p.id}>
+              <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px"}}>
+                <Av name={p.name} id={p.id}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div>
+                  <div style={{marginTop:7,height:5,background:C.fill,borderRadius:100,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:Math.abs(b)<0.01?C.fill:pos?C.success:C.danger,borderRadius:100,transition:"width .4s"}}/>
+                  </div>
+                  <div style={{fontSize:11,color:C.sec,marginTop:3}}>{Math.abs(b)<0.01?"Contas certas":pos?`A receber ${money(b)}`:`A pagar ${money(Math.abs(b))}`}</div>
+                </div>
+                <div style={{fontSize:16,fontWeight:800,color:Math.abs(b)<0.01?C.ter:pos?C.success:C.danger,minWidth:72,textAlign:"right"}}>
+                  {Math.abs(b)<0.01?"—":(pos?"+":"")+money(b)}
+                </div>
+              </div>
+              {i<peopleList.length-1 && <Line l={64}/>}
+            </div>
+          );
+        })}
+      </Card>
+
+      <SH title={`Transferências (${txns.length})`}/>
+      {txns.length===0 ? (
+        <Card style={{padding:"24px 16px",textAlign:"center",marginBottom:22}}>
+          <div style={{fontSize:36,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:16,fontWeight:700,color:C.label}}>Tudo resolvido!</div>
+          <div style={{fontSize:13,color:C.sec,marginTop:4}}>Nenhuma dívida por liquidar</div>
+        </Card>
+      ) : (
+        <Card style={{marginBottom:22}}>
+          {txns.map((t,i)=>{
+            const from=peopleList.find(p=>p.id===t.from), to=peopleList.find(p=>p.id===t.to);
+            return (
+              <div key={i}>
+                <div style={{display:"flex",alignItems:"center",padding:"14px 16px",gap:10}}>
+                  <Av name={from?.name||"?"} id={t.from} size={34}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,color:C.label,lineHeight:1.4}}>
+                      <strong>{from?.name}</strong><span style={{color:C.sec}}> deve pagar a </span><strong>{to?.name}</strong>
+                    </div>
+                  </div>
+                  <Av name={to?.name||"?"} id={t.to} size={34}/>
+                  <div style={{fontSize:17,fontWeight:800,color:C.primary,minWidth:72,textAlign:"right"}}>{money(t.amount)}</div>
+                </div>
+                {i<txns.length-1 && <Line/>}
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
+      {expList.length>0 && (
+        <>
+          <SH title="Resumo Global"/>
+          <Card style={{padding:"2px 16px",marginBottom:22}}>
+            {[
+              {l:"Total gasto",       v:money(totalSpent)},
+              {l:"Por pessoa (média)",v:peopleList.length?money(totalSpent/peopleList.length):"—"},
+              {l:"Despesas",          v:expList.length},
+              {l:"Transferências",    v:`${txns.length} pagamento${txns.length!==1?"s":""}`},
+            ].map((r,i,arr)=>(
+              <div key={r.l}>
+                <div style={{display:"flex",justifyContent:"space-between",padding:"13px 0"}}>
+                  <span style={{fontSize:15,color:C.label}}>{r.l}</span>
+                  <span style={{fontSize:15,fontWeight:700}}>{r.v}</span>
+                </div>
+                {i<arr.length-1 && <Line/>}
+              </div>
+            ))}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── ICONS & TABS ─────────────────────────────────────────────────────────────
+const ICONS = {
+  viagem:   a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.ter} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  pessoas:  a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.ter} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
+  menu:     a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.ter} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v3H3z"/><path d="M3 9h18v3H3z"/><path d="M3 15h18v3H3z"/></svg>,
+  despesas: a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.ter} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
+  divisao:  a=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.primary:C.ter} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>,
 };
-const TABS=[{id:"viagem",label:"Viagem"},{id:"pessoas",label:"Pessoas"},{id:"menu",label:"Menu"},{id:"despesas",label:"Despesas"},{id:"divisao",label:"Divisão"}];
+const TABS = [{id:"viagem",l:"Viagem"},{id:"pessoas",l:"Pessoas"},{id:"menu",l:"Menu"},{id:"despesas",l:"Despesas"},{id:"divisao",l:"Divisão"}];
 
-// ─── APP ─────────────────────────────────────────────────────────────────────
-function App(){
-  const [screen,setScreen]=useState("loading");
-  const [trip,setTripLocal]=useState(null);
-  const [people,setPeople]=useState([]);
-  const [mealsList,setMeals]=useState([]);
-  const [expsList,setExpenses]=useState([]);
-  const [tab,setTab]=useState("viagem");
-  const tripTimer=useRef(null);
-  const unsubs=useRef([]);
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen,   setScreen]   = useState("loading");
+  const [trip,     setTripLocal]= useState(null);
+  const [peopleList,setPeopleList]=useState([]);
+  const [mealDocs, setMealDocs] = useState([]);
+  const [expList,  setExpList]  = useState([]);
+  const [tab,      setTab]      = useState("viagem");
+  const timer   = useRef(null);
+  const unsubs  = useRef([]);
 
-  const clearUnsubs=()=>{unsubs.current.forEach(u=>u());unsubs.current=[];};
+  const clearSubs = () => { unsubs.current.forEach(u=>u()); unsubs.current=[]; };
 
   useEffect(()=>{
-    const saved=localStorage.getItem("ferias-trip-id");
-    if(saved)loadTrip(saved);else setScreen("join");
-    return()=>clearUnsubs();
+    const saved = localStorage.getItem("ferias-trip-id");
+    if (saved) loadTrip(saved); else setScreen("join");
+    return clearSubs;
   },[]);
 
-  const loadTrip=async(id)=>{
-    clearUnsubs();
-    const doc=await trips().doc(id).get();
-    if(!doc.exists){localStorage.removeItem("ferias-trip-id");setScreen("join");return;}
+  const loadTrip = async (id) => {
+    clearSubs();
+    const doc = await FS.trips().doc(id).get();
+    if (!doc.exists) { localStorage.removeItem("ferias-trip-id"); setScreen("join"); return; }
     setTripLocal({id:doc.id,...doc.data()});
 
-    // Real-time listeners
     unsubs.current.push(
-      people(id).orderBy("createdAt").onSnapshot(s=>setPeople(s.docs.map(toDoc)))
+      FS.people(id).orderBy("createdAt").onSnapshot(s=>setPeopleList(s.docs.map(FS.toDoc)))
     );
     unsubs.current.push(
-      meals(id).onSnapshot(s=>setMeals(s.docs.map(d=>({id:d.id,...d.data()}))))
+      FS.meals(id).onSnapshot(s=>setMealDocs(s.docs.map(d=>({id:d.id,...d.data()}))))
     );
     unsubs.current.push(
-      expenses(id).orderBy("createdAt").onSnapshot(s=>setExpenses(s.docs.map(toDoc)))
+      FS.expenses(id).orderBy("createdAt").onSnapshot(s=>setExpList(s.docs.map(FS.toDoc)))
     );
     setScreen("app");
   };
 
-  const handleJoin=async(code)=>{
-    const q=await trips().where("shareCode","==",code).limit(1).get();
-    if(q.empty)return false;
-    const id=q.docs[0].id;
-    localStorage.setItem("ferias-trip-id",id);
-    await loadTrip(id);return true;
-  };
-  const handleCreate=async()=>{
-    const ref=await trips().add({name:"As Nossas Férias",shareCode:genCode(),createdAt:ts()});
-    localStorage.setItem("ferias-trip-id",ref.id);
-    await loadTrip(ref.id);
-  };
-  const handleLeave=()=>{
-    clearUnsubs();localStorage.removeItem("ferias-trip-id");
-    setTripLocal(null);setPeople([]);setMeals([]);setExpenses([]);setScreen("join");
+  const handleJoin = async (code) => {
+    const q = await FS.trips().where("shareCode","==",code).limit(1).get();
+    if (q.empty) return false;
+    const id = q.docs[0].id;
+    localStorage.setItem("ferias-trip-id", id);
+    await loadTrip(id);
+    return true;
   };
 
-  const setTrip=useCallback((updater)=>{
-    setTripLocal(prev=>{
-      const next=typeof updater==="function"?updater(prev):updater;
-      if(tripTimer.current)clearTimeout(tripTimer.current);
-      tripTimer.current=setTimeout(()=>{
-        trips().doc(next.id).update({
-          name:next.name||"",location:next.location||"",
-          startDate:next.startDate||"",endDate:next.endDate||"",
-          budget:next.budget||"",notes:next.notes||"",
+  const handleCreate = async () => {
+    const ref = await FS.trips().add({ name:"As Nossas Férias", shareCode:genCode(), createdAt:FS.ts() });
+    localStorage.setItem("ferias-trip-id", ref.id);
+    await loadTrip(ref.id);
+  };
+
+  const handleLeave = () => {
+    clearSubs();
+    localStorage.removeItem("ferias-trip-id");
+    setTripLocal(null); setPeopleList([]); setMealDocs([]); setExpList([]);
+    setScreen("join");
+  };
+
+  const setTrip = useCallback((updater) => {
+    setTripLocal(prev => {
+      const next = typeof updater==="function" ? updater(prev) : updater;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(()=>{
+        FS.trips().doc(next.id).update({
+          name:next.name||"", location:next.location||"",
+          startDate:next.startDate||"", endDate:next.endDate||"",
+          budget:next.budget||"", notes:next.notes||"",
         });
-      },700);
+      }, 700);
       return next;
     });
   },[]);
 
-  if(screen==="loading")return<Spinner/>;
-  if(screen==="join")return<JoinScreen onJoin={handleJoin} onCreate={handleCreate}/>;
+  if (screen==="loading") return <Loader/>;
+  if (screen==="join")    return <JoinScreen onJoin={handleJoin} onCreate={handleCreate}/>;
 
-  return(
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue','Segoe UI',sans-serif",maxWidth:640,margin:"0 auto",position:"relative",paddingBottom:90}}>
-      <div style={{background:"rgba(242,242,247,.88)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.separator}`,padding:"48px 20px 12px",position:"sticky",top:0,zIndex:100}}>
-        <div style={{fontSize:12,color:C.secondary,fontWeight:500,letterSpacing:.3}}>{trip.location||"Férias em Grupo"}</div>
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",maxWidth:640,margin:"0 auto",paddingBottom:90}}>
+      <div style={{background:"rgba(242,242,247,.88)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.sep}`,padding:"48px 20px 12px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{fontSize:12,color:C.sec,fontWeight:500}}>{trip.location||"Férias em Grupo"}</div>
         <div style={{fontSize:26,fontWeight:800,color:C.label,lineHeight:1.1,marginTop:1}}>{trip.name||"As Nossas Férias"}</div>
       </div>
+
       <div>
-        {tab==="viagem"  &&<ViagemTab   trip={trip} setTrip={setTrip} people={people} expenses={expsList} onLeave={handleLeave}/>}
-        {tab==="pessoas" &&<PessoasTab  tripId={trip.id} people={people}/>}
-        {tab==="menu"    &&<MenuTab     trip={trip} mealsList={mealsList} people={people}/>}
-        {tab==="despesas"&&<DespesasTab tripId={trip.id} expsList={expsList} people={people}/>}
-        {tab==="divisao" &&<DivisaoTab  expsList={expsList} people={people}/>}
+        {tab==="viagem"   && <TabViagem   trip={trip} setTrip={setTrip} peopleList={peopleList} expList={expList} onLeave={handleLeave}/>}
+        {tab==="pessoas"  && <TabPessoas  tripId={trip.id} peopleList={peopleList}/>}
+        {tab==="menu"     && <TabMenu     trip={trip} mealDocs={mealDocs} peopleList={peopleList}/>}
+        {tab==="despesas" && <TabDespesas tripId={trip.id} expList={expList} peopleList={peopleList}/>}
+        {tab==="divisao"  && <TabDivisao  expList={expList} peopleList={peopleList}/>}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(242,242,247,.92)",backdropFilter:"blur(20px)",borderTop:`1px solid ${C.separator}`,display:"flex",paddingBottom:"env(safe-area-inset-bottom,0)",zIndex:200}}>
-        {TABS.map(t=>{const active=tab===t.id;return(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 0 11px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            {TAB_ICONS[t.id](active)}<span style={{fontSize:10,fontWeight:600,color:active?C.primary:C.tertiary,letterSpacing:.2}}>{t.label}</span>
-          </button>
-        );})}
+
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(242,242,247,.92)",backdropFilter:"blur(20px)",borderTop:`1px solid ${C.sep}`,display:"flex",paddingBottom:"env(safe-area-inset-bottom,0)",zIndex:200}}>
+        {TABS.map(t=>{
+          const active = tab===t.id;
+          return (
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 0 11px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+              {ICONS[t.id](active)}
+              <span style={{fontSize:10,fontWeight:600,color:active?C.primary:C.ter,letterSpacing:.2}}>{t.l}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-  </script>
+</script>
 </body>
 </html>

@@ -5,9 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="theme-color" content="#F2F2F7"/>
   <title>Férias em Grupo 🏖️</title>
-  <style>*{margin:0;padding:0;box-sizing:border-box}html,body,#root{height:100%}body{background:#F2F2F7;-webkit-font-smoothing:antialiased}@keyframes spin{to{transform:rotate(360deg)}}</style>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body,#root{height:100%}
+    body{background:#F2F2F7;-webkit-font-smoothing:antialiased}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .fadein{animation:fadeIn .25s ease}
+  </style>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -19,15 +27,16 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // ─── FIREBASE ────────────────────────────────────────────────────────────────
 firebase.initializeApp({
-  apiKey: "AIzaSyBly4RaIt28csWQM9LBYoeQOMbzrkCBzyE",
-  authDomain: "psicomotriweekend.firebaseapp.com",
-  projectId: "psicomotriweekend",
-  storageBucket: "psicomotriweekend.firebasestorage.app",
+  apiKey:            "AIzaSyBly4RaIt28csWQM9LBYoeQOMbzrkCBzyE",
+  authDomain:        "psicomotriweekend.firebaseapp.com",
+  projectId:         "psicomotriweekend",
+  storageBucket:     "psicomotriweekend.firebasestorage.app",
   messagingSenderId: "889638444753",
-  appId: "1:889638444753:web:bf8a94da7d2da656daaff0"
+  appId:             "1:889638444753:web:bf8a94da7d2da656daaff0"
 });
-const db = firebase.firestore();
-// Helpers com nomes únicos — sem conflito com state vars
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
 const FS = {
   trips:    ()    => db.collection("trips"),
   people:   (tid) => db.collection("trips").doc(tid).collection("people"),
@@ -41,17 +50,17 @@ const FS = {
 const DIETARY = ["Vegetariano","Vegan","Sem Glúten","Sem Lactose","Sem Frutos do Mar","Sem Frutos Secos","Halal","Kosher","Sem Álcool","Diabético"];
 const CATS = [
   {id:"supermercado",label:"Supermercado",emoji:"🛒"},
-  {id:"restaurante",label:"Restaurante",emoji:"🍽️"},
-  {id:"transporte",label:"Transporte",emoji:"🚗"},
-  {id:"alojamento",label:"Alojamento",emoji:"🏠"},
-  {id:"actividade",label:"Actividade",emoji:"🎉"},
-  {id:"outro",label:"Outro",emoji:"💳"},
+  {id:"restaurante", label:"Restaurante", emoji:"🍽️"},
+  {id:"transporte",  label:"Transporte",  emoji:"🚗"},
+  {id:"alojamento",  label:"Alojamento",  emoji:"🏠"},
+  {id:"actividade",  label:"Actividade",  emoji:"🎉"},
+  {id:"outro",       label:"Outro",       emoji:"💳"},
 ];
 const MEALS = [
   {key:"breakfast",label:"Pequeno-almoço",emoji:"☕"},
-  {key:"lunch",label:"Almoço",emoji:"🥗"},
-  {key:"snack",label:"Lanche",emoji:"🍎"},
-  {key:"dinner",label:"Jantar",emoji:"🍽️"},
+  {key:"lunch",    label:"Almoço",        emoji:"🥗"},
+  {key:"snack",    label:"Lanche",        emoji:"🍎"},
+  {key:"dinner",   label:"Jantar",        emoji:"🍽️"},
 ];
 const ACOLORS = ["#007AFF","#34C759","#FF9500","#AF52DE","#FF2D55","#5AC8FA","#FFCC00","#FF6B35","#30B0C7","#32ADE6"];
 const C = {
@@ -61,12 +70,13 @@ const C = {
 };
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
-const initials  = n => (n||"?").split(" ").map(x=>x[0]).join("").toUpperCase().slice(0,2);
-const money     = v => new Intl.NumberFormat("pt-PT",{style:"currency",currency:"EUR"}).format(v||0);
-const aclr      = id => { const h=String(id||0).split("").reduce((a,c)=>a+c.charCodeAt(0),0); return ACOLORS[h%ACOLORS.length]; };
-const genCode   = () => Math.random().toString(36).slice(2,8).toUpperCase();
-const todayStr  = () => new Date().toISOString().split("T")[0];
-const fmtDate   = ds => ds ? new Date(ds+"T00:00:00").toLocaleDateString("pt-PT",{weekday:"short",day:"numeric",month:"short"}) : "";
+const initials = n  => (n||"?").split(" ").map(x=>x[0]).join("").toUpperCase().slice(0,2);
+const money    = v  => new Intl.NumberFormat("pt-PT",{style:"currency",currency:"EUR"}).format(v||0);
+const aclr     = id => { const h=String(id||0).split("").reduce((a,c)=>a+c.charCodeAt(0),0); return ACOLORS[h%ACOLORS.length]; };
+const genCode  = () => Math.random().toString(36).slice(2,8).toUpperCase();
+const todayStr = () => new Date().toISOString().split("T")[0];
+const fmtDate  = ds => ds ? new Date(ds+"T00:00:00").toLocaleDateString("pt-PT",{weekday:"short",day:"numeric",month:"short"}) : "";
+
 function getDays(s,e){
   if(!s||!e) return [];
   const out=[];
@@ -75,58 +85,88 @@ function getDays(s,e){
   return out;
 }
 
-// ─── SPLITWISE ALGORITHM ─────────────────────────────────────────────────────
+// ─── SPLITWISE ───────────────────────────────────────────────────────────────
 function simplify(exps, ppl) {
-  const bal = {};
-  ppl.forEach(p => { bal[p.id] = 0; });
-  exps.forEach(({ amount, paidBy, splitWith }) => {
-    if (!splitWith?.length) return;
-    bal[paidBy] = (bal[paidBy]||0) + +amount;
-    const share = +amount / splitWith.length;
-    splitWith.forEach(id => { bal[id] = (bal[id]||0) - share; });
+  const bal = {}; ppl.forEach(p=>{bal[p.id]=0;});
+  exps.forEach(({amount,paidBy,splitWith})=>{
+    if(!splitWith?.length) return;
+    bal[paidBy]=(bal[paidBy]||0)+ +amount;
+    const share=+amount/splitWith.length;
+    splitWith.forEach(id=>{bal[id]=(bal[id]||0)-share;});
   });
-  const pos = [], neg = [];
-  Object.entries(bal).forEach(([id,b]) => {
-    if (b > 0.01) pos.push({id,a:b}); else if (b < -0.01) neg.push({id,a:-b});
+  const pos=[],neg=[];
+  Object.entries(bal).forEach(([id,b])=>{
+    if(b>0.01) pos.push({id,a:b}); else if(b<-0.01) neg.push({id,a:-b});
   });
   pos.sort((a,b)=>b.a-a.a); neg.sort((a,b)=>b.a-a.a);
-  const txns = []; let i=0, j=0;
-  while (i<pos.length && j<neg.length) {
-    const amt = Math.min(pos[i].a, neg[j].a);
-    if (amt > 0.01) txns.push({ from: neg[j].id, to: pos[i].id, amount: Math.round(amt*100)/100 });
-    pos[i].a -= amt; neg[j].a -= amt;
-    if (pos[i].a < 0.01) i++; if (neg[j].a < 0.01) j++;
+  const txns=[]; let i=0,j=0;
+  while(i<pos.length&&j<neg.length){
+    const amt=Math.min(pos[i].a,neg[j].a);
+    if(amt>0.01) txns.push({from:neg[j].id,to:pos[i].id,amount:Math.round(amt*100)/100});
+    pos[i].a-=amt; neg[j].a-=amt;
+    if(pos[i].a<0.01)i++; if(neg[j].a<0.01)j++;
   }
-  return { txns, bal };
+  return {txns,bal};
 }
 
 // ─── UI ATOMS ────────────────────────────────────────────────────────────────
-const Card = ({children,style,onClick}) => <div onClick={onClick} style={{background:C.card,borderRadius:12,overflow:"hidden",cursor:onClick?"pointer":"default",...style}}>{children}</div>;
-const SH   = ({title}) => <div style={{padding:"0 4px",marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6}}>{title}</span></div>;
-const Pill = ({label,color}) => { const c=color||C.primary; return <span style={{display:"inline-flex",background:`${c}18`,color:c,borderRadius:100,padding:"3px 10px",fontSize:12,fontWeight:500}}>{label}</span>; };
-const Av   = ({name,id,size=36}) => <div style={{width:size,height:size,borderRadius:"50%",background:aclr(id),display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size*.38,fontWeight:700,flexShrink:0}}>{initials(name)}</div>;
-const Chev = ({down}) => <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:down?"rotate(180deg)":"none",transition:".2s"}}><path d="M1 1l4 4 4-4" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>;
-const ChR  = () => <svg width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1 1l6 5.5L1 12" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-const Line = ({l=0}) => <div style={{height:1,background:C.sep,marginLeft:l}}/>;
+const Card = ({children,style,onClick}) =>
+  <div onClick={onClick} style={{background:C.card,borderRadius:12,overflow:"hidden",cursor:onClick?"pointer":"default",...style}}>{children}</div>;
 
-const Inp = ({label,value,onChange,type="text",placeholder,autoFocus}) => (
-  <div style={{marginBottom:16}}>
-    {label && <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:6}}>{label}</div>}
-    <input autoFocus={autoFocus} type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.sep}`,background:C.fill,fontSize:15,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
-  </div>
-);
+const SH = ({title}) =>
+  <div style={{padding:"0 4px",marginBottom:8}}>
+    <span style={{fontSize:12,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6}}>{title}</span>
+  </div>;
 
-const Btn = ({label,onClick,variant="primary",small,disabled,full=true,loading}) => {
-  const bg = disabled ? C.fill : variant==="primary" ? C.primary : variant==="danger" ? C.danger : C.fill;
-  const fg = disabled ? C.ter : variant==="secondary" ? C.label : "white";
-  return <button onClick={disabled||loading ? undefined : onClick}
-    style={{background:bg,color:fg,border:"none",borderRadius:10,padding:small?"8px 16px":"14px",fontSize:small?13:15,fontWeight:600,cursor:disabled||loading?"default":"pointer",width:full?"100%":"auto",fontFamily:"inherit",opacity:disabled?.6:1}}>
-    {loading ? "A guardar..." : label}
-  </button>;
+const Pill = ({label,color}) => {
+  const c=color||C.primary;
+  return <span style={{display:"inline-flex",background:`${c}18`,color:c,borderRadius:100,padding:"3px 10px",fontSize:12,fontWeight:500}}>{label}</span>;
 };
 
-const Modal = ({title,onClose,children}) => (
+const Av = ({name,id,size=36}) =>
+  <div style={{width:size,height:size,borderRadius:"50%",background:aclr(id),display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size*.38,fontWeight:700,flexShrink:0}}>
+    {initials(name)}
+  </div>;
+
+const Chev = ({down}) =>
+  <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:down?"rotate(180deg)":"none",transition:".2s"}}>
+    <path d="M1 1l4 4 4-4" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>;
+
+const ChR = () =>
+  <svg width="8" height="13" viewBox="0 0 8 13" fill="none">
+    <path d="M1 1l6 5.5L1 12" stroke={C.ter} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>;
+
+const Line = ({l=0}) => <div style={{height:1,background:C.sep,marginLeft:l}}/>;
+
+const Inp = ({label,value,onChange,type="text",placeholder,autoFocus}) =>
+  <div style={{marginBottom:16}}>
+    {label && <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:6}}>{label}</div>}
+    <input autoFocus={autoFocus} type={type} value={value}
+      onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+      style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.sep}`,
+        background:C.fill,fontSize:15,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+  </div>;
+
+const Btn = ({label,onClick,variant="primary",small,disabled,full=true,loading,icon}) => {
+  const bg = disabled ? C.fill : variant==="primary" ? C.primary : variant==="danger" ? C.danger : variant==="ghost" ? "transparent" : C.fill;
+  const fg = disabled ? C.ter : (variant==="secondary"||variant==="ghost") ? C.label : "white";
+  const border = variant==="ghost" ? `1.5px solid ${C.sep}` : "none";
+  return (
+    <button onClick={disabled||loading ? undefined : onClick} style={{
+      background:bg, color:fg, border, borderRadius:10,
+      padding:small?"8px 16px":"14px", fontSize:small?13:15, fontWeight:600,
+      cursor:disabled||loading?"default":"pointer", width:full?"100%":"auto",
+      fontFamily:"inherit", opacity:disabled?.5:1, display:"flex", alignItems:"center",
+      justifyContent:"center", gap:6, transition:"opacity .15s"
+    }}>
+      {loading ? <><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,.3)",borderTopColor:"white",animation:"spin .7s linear infinite"}}/> A processar...</> : <>{icon}{label}</>}
+    </button>
+  );
+};
+
+const Modal = ({title,onClose,children}) =>
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:1000,backdropFilter:"blur(10px)"}}>
     <div style={{background:C.card,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:640,maxHeight:"88vh",overflow:"auto",paddingBottom:32}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",borderBottom:`1px solid ${C.sep}`,position:"sticky",top:0,background:C.card,zIndex:1}}>
@@ -135,60 +175,206 @@ const Modal = ({title,onClose,children}) => (
       </div>
       <div style={{padding:"16px 20px"}}>{children}</div>
     </div>
-  </div>
-);
+  </div>;
 
-const Empty = ({emoji,title,subtitle}) => (
+const Empty = ({emoji,title,subtitle}) =>
   <div style={{textAlign:"center",padding:"60px 0",color:C.sec}}>
     <div style={{fontSize:44,marginBottom:12}}>{emoji}</div>
     <div style={{fontSize:16,fontWeight:600,color:C.label}}>{title}</div>
     {subtitle && <div style={{fontSize:14,marginTop:4}}>{subtitle}</div>}
-  </div>
-);
+  </div>;
 
-const Loader = () => (
-  <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:"-apple-system,sans-serif"}}>
+const Loader = ({msg="A carregar..."}) =>
+  <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,fontFamily:"-apple-system,sans-serif"}}>
     <div style={{width:36,height:36,borderRadius:"50%",border:`3px solid ${C.fill}`,borderTopColor:C.primary,animation:"spin .8s linear infinite"}}/>
-    <div style={{fontSize:14,color:C.sec}}>A carregar...</div>
-  </div>
-);
+    <div style={{fontSize:14,color:C.sec}}>{msg}</div>
+  </div>;
 
-// ─── JOIN ────────────────────────────────────────────────────────────────────
-function JoinScreen({ onJoin, onCreate }) {
-  const [code, setCode] = useState("");
-  const [err,  setErr]  = useState("");
-  const [busy, setBusy] = useState(false);
+const ErrBox = ({msg}) => msg
+  ? <div style={{background:"rgba(255,59,48,.08)",border:"1px solid rgba(255,59,48,.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:C.danger,marginBottom:14}}>{msg}</div>
+  : null;
 
-  const go = async () => {
-    const c = code.toUpperCase().trim();
-    if (!c) return;
+// ─── AUTH ERRORS PT ───────────────────────────────────────────────────────────
+function authErr(code) {
+  const map = {
+    "auth/user-not-found":      "Utilizador não encontrado.",
+    "auth/wrong-password":      "Palavra-passe incorreta.",
+    "auth/invalid-credential":  "Email ou palavra-passe incorretos.",
+    "auth/email-already-in-use":"Este email já está registado.",
+    "auth/weak-password":       "Palavra-passe demasiado fraca (mínimo 6 caracteres).",
+    "auth/invalid-email":       "Email inválido.",
+    "auth/too-many-requests":   "Demasiadas tentativas. Tenta mais tarde.",
+    "auth/network-request-failed":"Sem ligação à internet.",
+  };
+  return map[code] || "Ocorreu um erro. Tenta de novo.";
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onAuth }) {
+  const [mode,    setMode]    = useState("login"); // login | register
+  const [email,   setEmail]   = useState("");
+  const [pass,    setPass]    = useState("");
+  const [name,    setName]    = useState("");
+  const [err,     setErr]     = useState("");
+  const [busy,    setBusy]    = useState(false);
+
+  const reset = () => { setErr(""); };
+
+  const handleLogin = async () => {
+    if (!email||!pass) return setErr("Preenche todos os campos.");
     setBusy(true); setErr("");
-    const ok = await onJoin(c);
-    if (!ok) setErr("Código não encontrado.");
+    try {
+      const cred = await auth.signInWithEmailAndPassword(email.trim(), pass);
+      onAuth(cred.user);
+    } catch(e) {
+      setErr(authErr(e.code));
+    }
+    setBusy(false);
+  };
+
+  const handleRegister = async () => {
+    if (!name||!email||!pass) return setErr("Preenche todos os campos.");
+    setBusy(true); setErr("");
+    try {
+      const cred = await auth.createUserWithEmailAndPassword(email.trim(), pass);
+      await cred.user.updateProfile({ displayName: name.trim() });
+      onAuth(cred.user);
+    } catch(e) {
+      setErr(authErr(e.code));
+    }
     setBusy(false);
   };
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{width:"100%",maxWidth:360}}>
-        <div style={{textAlign:"center",marginBottom:48}}>
-          <div style={{fontSize:64,marginBottom:12}}>🏖️</div>
-          <div style={{fontSize:28,fontWeight:800,color:C.label}}>Férias em Grupo</div>
-          <div style={{fontSize:15,color:C.sec,marginTop:6}}>Organiza tudo num só sítio</div>
+      <div style={{width:"100%",maxWidth:380}} className="fadein">
+
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:36}}>
+          <div style={{fontSize:60,marginBottom:10}}>🏖️</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.label}}>Férias em Grupo</div>
+          <div style={{fontSize:14,color:C.sec,marginTop:5}}>Organiza tudo num só sítio</div>
         </div>
+
+        {/* Segmented control */}
+        <div style={{display:"flex",background:C.fill,borderRadius:11,padding:3,marginBottom:24}}>
+          {[["login","Entrar"],["register","Criar conta"]].map(([m,l])=>(
+            <button key={m} onClick={()=>{setMode(m);reset();}} style={{
+              flex:1,padding:"9px 0",border:"none",borderRadius:9,cursor:"pointer",fontFamily:"inherit",
+              fontSize:14,fontWeight:600,transition:"all .2s",
+              background:mode===m?"white":"transparent",
+              color:mode===m?C.label:C.sec,
+              boxShadow:mode===m?"0 1px 4px rgba(0,0,0,.12)":"none",
+            }}>{l}</button>
+          ))}
+        </div>
+
         <Card style={{padding:20,marginBottom:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Entrar numa viagem</div>
-          <Inp value={code} onChange={v=>{setCode(v.toUpperCase());setErr("");}} placeholder="Código ex. A3F9B2" autoFocus/>
-          {err && <div style={{fontSize:13,color:C.danger,marginBottom:12,marginTop:-8}}>⚠️ {err}</div>}
-          <Btn label="Entrar" onClick={go} disabled={!code.trim()} loading={busy}/>
+          <ErrBox msg={err}/>
+
+          {mode==="register" && (
+            <Inp label="Nome" value={name} onChange={v=>{setName(v);reset();}} placeholder="O teu nome" autoFocus={mode==="register"}/>
+          )}
+          <Inp label="Email" type="email" value={email} onChange={v=>{setEmail(v);reset();}} placeholder="email@exemplo.com" autoFocus={mode==="login"}/>
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:6}}>Palavra-passe</div>
+            <input type="password" value={pass} onChange={e=>{setPass(e.target.value);reset();}}
+              placeholder={mode==="register"?"Mínimo 6 caracteres":"••••••••"}
+              onKeyDown={e=>e.key==="Enter"&&(mode==="login"?handleLogin():handleRegister())}
+              style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${C.sep}`,background:C.fill,fontSize:15,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+
+          <Btn
+            label={mode==="login" ? "Entrar" : "Criar conta"}
+            onClick={mode==="login" ? handleLogin : handleRegister}
+            loading={busy}
+            disabled={!email||!pass||(mode==="register"&&!name)}
+          />
         </Card>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+
+        <div style={{textAlign:"center",fontSize:12,color:C.ter,lineHeight:1.6}}>
+          {mode==="login" ? "Não tens conta? " : "Já tens conta? "}
+          <button onClick={()=>{setMode(mode==="login"?"register":"login");reset();}}
+            style={{background:"none",border:"none",color:C.primary,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+            {mode==="login" ? "Cria uma aqui" : "Entra aqui"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TRIP SELECT SCREEN ───────────────────────────────────────────────────────
+function TripSelectScreen({ user, onJoin, onCreate, onLogout }) {
+  const [code,  setCode]  = useState("");
+  const [err,   setErr]   = useState("");
+  const [busy,  setBusy]  = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const handleJoin = async () => {
+    const c = code.toUpperCase().trim();
+    if (!c) return setErr("Insere um código.");
+    setBusy(true); setErr("");
+    const ok = await onJoin(c);
+    if (!ok) setErr("Código não encontrado. Verifica e tenta de novo.");
+    setBusy(false);
+  };
+
+  const handleCreate = async () => {
+    setCreating(true); setErr("");
+    try {
+      await onCreate();
+    } catch(e) {
+      setErr("Erro ao criar viagem. Tenta de novo.");
+      setCreating(false);
+    }
+  };
+
+  const initial = (user.displayName||user.email||"?")[0].toUpperCase();
+  const displayName = user.displayName || user.email;
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{width:"100%",maxWidth:380}} className="fadein">
+
+        {/* User badge */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32,padding:"12px 16px",background:C.card,borderRadius:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:"50%",background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:16}}>{initial}</div>
+            <div>
+              <div style={{fontSize:14,fontWeight:600,color:C.label}}>{displayName}</div>
+              <div style={{fontSize:12,color:C.sec}}>Sessão iniciada</div>
+            </div>
+          </div>
+          <button onClick={onLogout} style={{background:"none",border:"none",color:C.sec,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Sair</button>
+        </div>
+
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:22,fontWeight:800,color:C.label}}>As tuas férias</div>
+          <div style={{fontSize:14,color:C.sec,marginTop:4}}>Entra numa viagem ou cria uma nova</div>
+        </div>
+
+        <ErrBox msg={err}/>
+
+        {/* Join */}
+        <Card style={{padding:20,marginBottom:12}}>
+          <div style={{fontSize:13,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Entrar numa viagem existente</div>
+          <Inp value={code} onChange={v=>{setCode(v.toUpperCase());setErr("");}} placeholder="Código ex. A3F9B2"/>
+          <Btn label="Entrar com código" onClick={handleJoin} loading={busy} disabled={!code.trim() || creating}/>
+        </Card>
+
+        <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
           <div style={{flex:1,height:1,background:C.sep}}/><span style={{fontSize:13,color:C.ter}}>ou</span><div style={{flex:1,height:1,background:C.sep}}/>
         </div>
-        <Btn label="✨ Criar nova viagem" onClick={onCreate} variant="secondary"/>
-        <div style={{textAlign:"center",marginTop:24,fontSize:12,color:C.ter,lineHeight:1.6}}>
-          Partilha o código de 6 letras<br/>para o grupo entrar na mesma viagem
-        </div>
+
+        {/* Create */}
+        <Btn
+          label="✨  Criar nova viagem"
+          onClick={handleCreate}
+          loading={creating}
+          disabled={busy}
+          variant="ghost"
+        />
       </div>
     </div>
   );
@@ -196,32 +382,27 @@ function JoinScreen({ onJoin, onCreate }) {
 
 // ─── TAB VIAGEM ───────────────────────────────────────────────────────────────
 function TabViagem({ trip, setTrip, peopleList, expList, onLeave }) {
-  const nAdults   = peopleList.filter(p=>p.type==="adult").length;
-  const nChildren = peopleList.filter(p=>p.type==="child").length;
-  const nDays     = getDays(trip.startDate, trip.endDate).length;
-  const total     = expList.reduce((s,e)=>s+ +e.amount,0);
-  const budget    = +(trip.budget||0);
-  const pct       = budget>0 ? Math.min(100,total/budget*100) : 0;
-  const over      = budget>0 && total>budget;
+  const nA    = peopleList.filter(p=>p.type==="adult").length;
+  const nC    = peopleList.filter(p=>p.type==="child").length;
+  const nD    = getDays(trip.startDate,trip.endDate).length;
+  const total = expList.reduce((s,e)=>s+ +e.amount,0);
+  const budget= +(trip.budget||0);
+  const pct   = budget>0 ? Math.min(100,total/budget*100) : 0;
+  const over  = budget>0 && total>budget;
 
   return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <input value={trip.name||""} onChange={e=>setTrip(t=>({...t,name:e.target.value}))}
-          style={{fontSize:30,fontWeight:800,color:C.label,background:"transparent",border:"none",outline:"none",width:"100%",fontFamily:"inherit"}} placeholder="Nome das Férias"/>
+          style={{fontSize:28,fontWeight:800,color:C.label,background:"transparent",border:"none",outline:"none",width:"100%",fontFamily:"inherit"}} placeholder="Nome das Férias"/>
         <div style={{fontSize:15,color:C.sec}}>
           {trip.location||"Localização por definir"}
-          {trip.startDate&&trip.endDate ? ` · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}` : ""}
+          {trip.startDate&&trip.endDate?` · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}`:""}
         </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
-        {[
-          {l:"Adultos", v:nAdults||"—",  c:C.primary},
-          {l:"Crianças",v:nChildren||"—",c:C.warning},
-          {l:"Dias",    v:nDays||"—",    c:C.success},
-          {l:"Despesas",v:total>0?money(total):"—", c:over?C.danger:C.label},
-        ].map(s=>(
+        {[{l:"Adultos",v:nA||"—",c:C.primary},{l:"Crianças",v:nC||"—",c:C.warning},{l:"Dias",v:nD||"—",c:C.success},{l:"Despesas",v:total>0?money(total):"—",c:over?C.danger:C.label}].map(s=>(
           <Card key={s.l} style={{padding:"14px 16px"}}>
             <div style={{fontSize:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
             <div style={{fontSize:12,color:C.sec,marginTop:4}}>{s.l}</div>
@@ -246,24 +427,23 @@ function TabViagem({ trip, setTrip, peopleList, expList, onLeave }) {
       <Card style={{padding:"14px 16px",marginBottom:22}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:13,color:C.sec}}>Código de acesso</div>
-            <div style={{fontSize:28,fontWeight:800,letterSpacing:4,color:C.primary,marginTop:4}}>{trip.shareCode}</div>
+            <div style={{fontSize:13,color:C.sec}}>Partilha com o grupo</div>
+            <div style={{fontSize:30,fontWeight:800,letterSpacing:5,color:C.primary,marginTop:4}}>{trip.shareCode}</div>
           </div>
           <button onClick={()=>navigator.clipboard?.writeText(trip.shareCode)}
             style={{background:C.pBg,color:C.primary,border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
             Copiar
           </button>
         </div>
-        <div style={{fontSize:12,color:C.sec,marginTop:10}}>Partilha com o grupo para entrarem na mesma viagem</div>
       </Card>
 
       <SH title="Detalhes"/>
       <Card style={{padding:"2px 16px",marginBottom:22}}>
         {[
-          {label:"Localização",key:"location",type:"text",ph:"Algarve, Douro..."},
-          {label:"Início",     key:"startDate",type:"date"},
-          {label:"Fim",        key:"endDate",  type:"date"},
-          {label:"Orçamento €",key:"budget",   type:"number",ph:"0"},
+          {label:"Localização",key:"location",  type:"text",  ph:"Algarve, Douro..."},
+          {label:"Início",     key:"startDate", type:"date"},
+          {label:"Fim",        key:"endDate",   type:"date"},
+          {label:"Orçamento €",key:"budget",    type:"number",ph:"0"},
         ].map((f,i,arr)=>(
           <div key={f.key}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 0"}}>
@@ -298,22 +478,18 @@ function TabPessoas({ tripId, peopleList }) {
   const [busy,  setBusy]  = useState(false);
 
   const open = (p=null) => {
-    setForm(p ? {name:p.name,type:p.type,dietary:[...(p.dietary||[])]} : {name:"",type:"adult",dietary:[]});
+    setForm(p?{name:p.name,type:p.type,dietary:[...(p.dietary||[])]}:{name:"",type:"adult",dietary:[]});
     setEditId(p?.id||null); setModal(true);
   };
   const save = async () => {
     if (!form.name.trim()) return;
     setBusy(true);
-    if (editId) await FS.people(tripId).doc(editId).update(form);
-    else        await FS.people(tripId).add({...form, createdAt: FS.ts()});
+    editId ? await FS.people(tripId).doc(editId).update(form)
+           : await FS.people(tripId).add({...form,createdAt:FS.ts()});
     setBusy(false); setModal(false);
   };
-  const del = async () => {
-    setBusy(true);
-    await FS.people(tripId).doc(editId).delete();
-    setBusy(false); setModal(false);
-  };
-  const toggleD = d => setForm(f=>({...f,dietary: f.dietary.includes(d) ? f.dietary.filter(x=>x!==d) : [...f.dietary,d]}));
+  const del = async () => { setBusy(true); await FS.people(tripId).doc(editId).delete(); setBusy(false); setModal(false); };
+  const toggleD = d => setForm(f=>({...f,dietary:f.dietary.includes(d)?f.dietary.filter(x=>x!==d):[...f.dietary,d]}));
 
   const adults   = peopleList.filter(p=>p.type==="adult");
   const children = peopleList.filter(p=>p.type==="child");
@@ -328,13 +504,13 @@ function TabPessoas({ tripId, peopleList }) {
         <button onClick={()=>open()} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
       </div>
 
-      {[["Adultos",adults],["Crianças",children]].map(([title,group]) => {
-        if (!group.length) return null;
+      {[["Adultos",adults],["Crianças",children]].map(([title,group])=>{
+        if(!group.length) return null;
         return (
           <div key={title} style={{marginBottom:20}}>
             <SH title={title}/>
             <Card>
-              {group.map((p,i) => (
+              {group.map((p,i)=>(
                 <div key={p.id}>
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer"}} onClick={()=>open(p)}>
                     <Av name={p.name} id={p.id}/>
@@ -383,79 +559,53 @@ function TabPessoas({ tripId, peopleList }) {
 
 // ─── TAB MENU ─────────────────────────────────────────────────────────────────
 function TabMenu({ trip, mealDocs, peopleList }) {
-  const days = getDays(trip.startDate, trip.endDate);
-  const [open,  setOpen]  = useState(null);
-  const [ed,    setEd]    = useState(null);
-  const [txt,   setTxt]   = useState("");
-
-  const getVal = (date,key) => (mealDocs.find(m=>m.id===date)||{})[key]||"";
-  const saveVal = async (date,key,val) => {
-    await FS.meals(trip.id).doc(date).set({[key]:val},{merge:true});
-    setEd(null);
-  };
-
+  const days = getDays(trip.startDate,trip.endDate);
+  const [open,setOpen]=useState(null); const [ed,setEd]=useState(null); const [txt,setTxt]=useState("");
+  const getVal  = (date,key) => (mealDocs.find(m=>m.id===date)||{})[key]||"";
+  const saveVal = async (date,key,val) => { await FS.meals(trip.id).doc(date).set({[key]:val},{merge:true}); setEd(null); };
   const allR = [...new Set(peopleList.flatMap(p=>p.dietary||[]))];
-  if (!days.length) return <Empty emoji="📅" title="Datas não definidas" subtitle="Define as datas no separador Viagem"/>;
-
+  if(!days.length) return <Empty emoji="📅" title="Datas não definidas" subtitle="Define as datas no separador Viagem"/>;
   return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{marginBottom:20}}>
         <div style={{fontSize:22,fontWeight:800}}>{days.length} Dias</div>
-        {allR.length>0 && (
-          <div style={{marginTop:8,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:12,color:C.sec,fontWeight:500}}>⚠️ Atenção:</span>
-            {allR.map(r=><Pill key={r} label={r} color={C.warning}/>)}
-          </div>
-        )}
+        {allR.length>0 && <div style={{marginTop:8,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:12,color:C.sec,fontWeight:500}}>⚠️ Atenção:</span>{allR.map(r=><Pill key={r} label={r} color={C.warning}/>)}</div>}
       </div>
-
-      {days.map((date,idx) => {
-        const isOpen = open===date;
-        const filled = MEALS.filter(m=>getVal(date,m.key)).length;
+      {days.map((date,idx)=>{
+        const isOpen=open===date; const filled=MEALS.filter(m=>getVal(date,m.key)).length;
         return (
           <Card key={date} style={{marginBottom:10}}>
             <div onClick={()=>setOpen(isOpen?null:date)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",cursor:"pointer"}}>
               <div>
                 <div style={{fontSize:15,fontWeight:700,color:C.label}}>Dia {idx+1} · {fmtDate(date)}</div>
-                <div style={{fontSize:12,color:C.sec,marginTop:3}}>
-                  {filled===4 ? <span style={{color:C.success}}>✓ Completo</span> : `${filled}/4 refeições planeadas`}
-                </div>
+                <div style={{fontSize:12,color:C.sec,marginTop:3}}>{filled===4?<span style={{color:C.success}}>✓ Completo</span>:`${filled}/4 refeições planeadas`}</div>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {filled===4 && <div style={{width:8,height:8,borderRadius:"50%",background:C.success}}/>}
-                <Chev down={isOpen}/>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>{filled===4&&<div style={{width:8,height:8,borderRadius:"50%",background:C.success}}/>}<Chev down={isOpen}/></div>
             </div>
-
             {isOpen && (
               <div style={{borderTop:`1px solid ${C.sep}`}}>
-                {MEALS.map((meal,i) => {
-                  const val  = getVal(date,meal.key);
-                  const isEd = ed?.date===date && ed?.key===meal.key;
+                {MEALS.map((meal,i)=>{
+                  const val=getVal(date,meal.key); const isEd=ed?.date===date&&ed?.key===meal.key;
                   return (
                     <div key={meal.key}>
                       <div style={{padding:"12px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
                         <span style={{fontSize:22,marginTop:1,flexShrink:0}}>{meal.emoji}</span>
                         <div style={{flex:1}}>
                           <div style={{fontSize:11,fontWeight:600,color:C.sec,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>{meal.label}</div>
-                          {isEd ? (
+                          {isEd?(
                             <div>
-                              <textarea autoFocus value={txt} onChange={e=>setTxt(e.target.value)} rows={2}
-                                placeholder={`O que há ao ${meal.label.toLowerCase()}?`}
-                                style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${C.primary}`,background:C.fill,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",color:C.label}}/>
+                              <textarea autoFocus value={txt} onChange={e=>setTxt(e.target.value)} rows={2} placeholder={`O que há ao ${meal.label.toLowerCase()}?`} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${C.primary}`,background:C.fill,fontSize:14,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",color:C.label}}/>
                               <div style={{display:"flex",gap:8,marginTop:8}}>
                                 <Btn small label="Guardar" onClick={()=>saveVal(date,meal.key,txt)} full={false}/>
                                 <Btn small label="Cancelar" variant="secondary" onClick={()=>setEd(null)} full={false}/>
                               </div>
                             </div>
-                          ) : (
-                            <div onClick={()=>{setTxt(val);setEd({date,key:meal.key});}} style={{fontSize:14,color:val?C.label:C.ter,cursor:"pointer",lineHeight:1.5,minHeight:20}}>
-                              {val||`Adicionar ${meal.label.toLowerCase()}...`}
-                            </div>
+                          ):(
+                            <div onClick={()=>{setTxt(val);setEd({date,key:meal.key});}} style={{fontSize:14,color:val?C.label:C.ter,cursor:"pointer",lineHeight:1.5,minHeight:20}}>{val||`Adicionar ${meal.label.toLowerCase()}...`}</div>
                           )}
                         </div>
                       </div>
-                      {i<MEALS.length-1 && <Line l={50}/>}
+                      {i<MEALS.length-1&&<Line l={50}/>}
                     </div>
                   );
                 })}
@@ -470,26 +620,20 @@ function TabMenu({ trip, mealDocs, peopleList }) {
 
 // ─── TAB DESPESAS ─────────────────────────────────────────────────────────────
 function TabDespesas({ tripId, expList, peopleList }) {
-  const [modal, setModal] = useState(false);
-  const [form,  setForm]  = useState({description:"",amount:"",paidBy:"",category:"supermercado",splitWith:[]});
-  const [busy,  setBusy]  = useState(false);
-
-  const openAdd = () => {
-    setForm({description:"",amount:"",paidBy:peopleList[0]?.id||"",category:"supermercado",splitWith:peopleList.map(p=>p.id)});
-    setModal(true);
-  };
-  const save = async () => {
-    if (!form.description||!form.amount||!form.paidBy||!form.splitWith.length) return;
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({description:"",amount:"",paidBy:"",category:"supermercado",splitWith:[]});
+  const [busy,setBusy]=useState(false);
+  const openAdd=()=>{ setForm({description:"",amount:"",paidBy:peopleList[0]?.id||"",category:"supermercado",splitWith:peopleList.map(p=>p.id)}); setModal(true); };
+  const save=async()=>{
+    if(!form.description||!form.amount||!form.paidBy||!form.splitWith.length) return;
     setBusy(true);
-    await FS.expenses(tripId).add({...form, amount:+form.amount, date:todayStr(), createdAt:FS.ts()});
+    await FS.expenses(tripId).add({...form,amount:+form.amount,date:todayStr(),createdAt:FS.ts()});
     setBusy(false); setModal(false);
   };
-  const del = id => FS.expenses(tripId).doc(id).delete();
-  const toggleP = id => setForm(f=>({...f,splitWith: f.splitWith.includes(id) ? f.splitWith.filter(x=>x!==id) : [...f.splitWith,id]}));
-
-  const total = expList.reduce((s,e)=>s+ +e.amount,0);
-  const byCat = CATS.map(c=>({...c,t:expList.filter(e=>e.category===c.id).reduce((s,e)=>s+ +e.amount,0)})).filter(c=>c.t>0);
-
+  const del=id=>FS.expenses(tripId).doc(id).delete();
+  const toggleP=id=>setForm(f=>({...f,splitWith:f.splitWith.includes(id)?f.splitWith.filter(x=>x!==id):[...f.splitWith,id]}));
+  const total=expList.reduce((s,e)=>s+ +e.amount,0);
+  const byCat=CATS.map(c=>({...c,t:expList.filter(e=>e.category===c.id).reduce((s,e)=>s+ +e.amount,0)})).filter(c=>c.t>0);
   return (
     <div style={{padding:"16px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:22}}>
@@ -497,200 +641,56 @@ function TabDespesas({ tripId, expList, peopleList }) {
           <div style={{fontSize:30,fontWeight:800,color:C.label}}>{money(total)}</div>
           <div style={{fontSize:13,color:C.sec,marginTop:2}}>{expList.length} despesa{expList.length!==1?"s":""}</div>
         </div>
-        {peopleList.length>0 && (
-          <button onClick={openAdd} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-        )}
+        {peopleList.length>0 && <button onClick={openAdd} style={{background:C.primary,color:"white",border:"none",borderRadius:50,width:34,height:34,fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>}
       </div>
-
-      {byCat.length>0 && (
-        <>
-          <SH title="Por categoria"/>
-          <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
-            {byCat.map(c=>(
-              <div key={c.id} style={{background:C.card,borderRadius:12,padding:"12px 14px",minWidth:90,flexShrink:0}}>
-                <div style={{fontSize:22}}>{c.emoji}</div>
-                <div style={{fontSize:13,fontWeight:700,color:C.label,marginTop:5}}>{money(c.t)}</div>
-                <div style={{fontSize:11,color:C.sec,marginTop:1}}>{c.label}</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {expList.length>0 ? (
-        <>
-          <SH title="Histórico"/>
-          <Card style={{marginBottom:20}}>
-            {[...expList].reverse().map((e,i,arr)=>{
-              const payer = peopleList.find(p=>p.id===e.paidBy);
-              const cat   = CATS.find(c=>c.id===e.category);
-              const share = e.splitWith?.length ? +e.amount/e.splitWith.length : 0;
-              return (
-                <div key={e.id}>
-                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px"}}>
-                    <div style={{width:42,height:42,borderRadius:11,background:C.fill,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat?.emoji||"💳"}</div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:15,fontWeight:600,color:C.label,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.description}</div>
-                      <div style={{fontSize:12,color:C.sec,marginTop:2}}>Pago por <strong>{payer?.name||"?"}</strong> · {e.splitWith?.length||0} pessoas · {money(share)}/pessoa</div>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:15,fontWeight:700}}>{money(+e.amount)}</div>
-                      <button onClick={()=>del(e.id)} style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>remover</button>
-                    </div>
-                  </div>
-                  {i<arr.length-1 && <Line l={70}/>}
-                </div>
-              );
-            })}
-          </Card>
-        </>
-      ) : (
-        <Empty emoji="💶" title="Sem despesas ainda" subtitle={peopleList.length===0?"Adiciona pessoas primeiro":"Regista a primeira despesa"}/>
-      )}
-
-      {modal && (
-        <Modal title="Nova Despesa" onClose={()=>setModal(false)}>
-          <Inp label="Descrição" value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="Supermercado, restaurante..."/>
-          <Inp label="Valor (€)" type="number" value={form.amount} onChange={v=>setForm(f=>({...f,amount:v}))} placeholder="0.00"/>
-
-          <div style={{marginBottom:16}}>
-            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Categoria</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {CATS.map(c=>(
-                <button key={c.id} onClick={()=>setForm(f=>({...f,category:c.id}))} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.category===c.id?C.primary:C.sep}`,background:form.category===c.id?C.pBg:"transparent",color:form.category===c.id?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{c.emoji} {c.label}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{marginBottom:16}}>
-            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Quem pagou?</div>
-            <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {peopleList.map(p=>(
-                <div key={p.id} onClick={()=>setForm(f=>({...f,paidBy:p.id}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${form.paidBy===p.id?C.primary:C.sep}`,background:form.paidBy===p.id?C.pBg:"transparent"}}>
-                  <Av name={p.name} id={p.id} size={28}/>
-                  <span style={{flex:1,fontSize:14,color:form.paidBy===p.id?C.primary:C.label,fontWeight:form.paidBy===p.id?700:400}}>{p.name}</span>
-                  {form.paidBy===p.id && <span style={{fontSize:12,color:C.primary}}>✓</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{marginBottom:22}}>
-            <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Dividir entre ({form.splitWith.length}/{peopleList.length})</div>
-            <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {peopleList.map(p=>{
-                const sel   = form.splitWith.includes(p.id);
-                const share = form.amount&&form.splitWith.length ? +form.amount/form.splitWith.length : 0;
-                return (
-                  <div key={p.id} onClick={()=>toggleP(p.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.sBg:"transparent"}}>
-                    <Av name={p.name} id={p.id} size={28}/>
-                    <span style={{flex:1,fontSize:14,color:C.label}}>{p.name}</span>
-                    {sel&&form.amount && <span style={{fontSize:13,fontWeight:600,color:C.success}}>{money(share)}</span>}
-                    <div style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.success:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      {sel && <span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <Btn label="Adicionar Despesa" onClick={save} loading={busy} disabled={!form.description||!form.amount||!form.paidBy||!form.splitWith.length}/>
-        </Modal>
-      )}
+      {byCat.length>0&&(<><SH title="Por categoria"/><div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>{byCat.map(c=><div key={c.id} style={{background:C.card,borderRadius:12,padding:"12px 14px",minWidth:90,flexShrink:0}}><div style={{fontSize:22}}>{c.emoji}</div><div style={{fontSize:13,fontWeight:700,color:C.label,marginTop:5}}>{money(c.t)}</div><div style={{fontSize:11,color:C.sec,marginTop:1}}>{c.label}</div></div>)}</div></>)}
+      {expList.length>0?(<><SH title="Histórico"/>
+        <Card style={{marginBottom:20}}>{[...expList].reverse().map((e,i,arr)=>{
+          const payer=peopleList.find(p=>p.id===e.paidBy); const cat=CATS.find(c=>c.id===e.category);
+          const share=e.splitWith?.length?+e.amount/e.splitWith.length:0;
+          return (<div key={e.id}><div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px"}}>
+            <div style={{width:42,height:42,borderRadius:11,background:C.fill,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat?.emoji||"💳"}</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:600,color:C.label,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.description}</div><div style={{fontSize:12,color:C.sec,marginTop:2}}>Pago por <strong>{payer?.name||"?"}</strong> · {e.splitWith?.length||0} pax · {money(share)}/pessoa</div></div>
+            <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:15,fontWeight:700}}>{money(+e.amount)}</div><button onClick={()=>del(e.id)} style={{background:"none",border:"none",color:C.danger,fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>remover</button></div>
+          </div>{i<arr.length-1&&<Line l={70}/>}</div>);
+        })}</Card></>):<Empty emoji="💶" title="Sem despesas ainda" subtitle={peopleList.length===0?"Adiciona pessoas primeiro":"Regista a primeira despesa"}/>}
+      {modal&&<Modal title="Nova Despesa" onClose={()=>setModal(false)}>
+        <Inp label="Descrição" value={form.description} onChange={v=>setForm(f=>({...f,description:v}))} placeholder="Supermercado, restaurante..."/>
+        <Inp label="Valor (€)" type="number" value={form.amount} onChange={v=>setForm(f=>({...f,amount:v}))} placeholder="0.00"/>
+        <div style={{marginBottom:16}}><div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Categoria</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{CATS.map(c=><button key={c.id} onClick={()=>setForm(f=>({...f,category:c.id}))} style={{padding:"6px 12px",borderRadius:100,border:`1px solid ${form.category===c.id?C.primary:C.sep}`,background:form.category===c.id?C.pBg:"transparent",color:form.category===c.id?C.primary:C.label,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{c.emoji} {c.label}</button>)}</div></div>
+        <div style={{marginBottom:16}}><div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Quem pagou?</div><div style={{display:"flex",flexDirection:"column",gap:7}}>{peopleList.map(p=><div key={p.id} onClick={()=>setForm(f=>({...f,paidBy:p.id}))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${form.paidBy===p.id?C.primary:C.sep}`,background:form.paidBy===p.id?C.pBg:"transparent"}}><Av name={p.name} id={p.id} size={28}/><span style={{flex:1,fontSize:14,color:form.paidBy===p.id?C.primary:C.label,fontWeight:form.paidBy===p.id?700:400}}>{p.name}</span>{form.paidBy===p.id&&<span style={{fontSize:12,color:C.primary}}>✓</span>}</div>)}</div></div>
+        <div style={{marginBottom:22}}><div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Dividir entre ({form.splitWith.length}/{peopleList.length})</div><div style={{display:"flex",flexDirection:"column",gap:7}}>{peopleList.map(p=>{const sel=form.splitWith.includes(p.id);const share=form.amount&&form.splitWith.length?+form.amount/form.splitWith.length:0;return(<div key={p.id} onClick={()=>toggleP(p.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.sBg:"transparent"}}><Av name={p.name} id={p.id} size={28}/><span style={{flex:1,fontSize:14,color:C.label}}>{p.name}</span>{sel&&form.amount&&<span style={{fontSize:13,fontWeight:600,color:C.success}}>{money(share)}</span>}<div style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${sel?C.success:C.sep}`,background:sel?C.success:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}</div></div>);})}</div></div>
+        <Btn label="Adicionar Despesa" onClick={save} loading={busy} disabled={!form.description||!form.amount||!form.paidBy||!form.splitWith.length}/>
+      </Modal>}
     </div>
   );
 }
 
 // ─── TAB DIVISÃO ──────────────────────────────────────────────────────────────
 function TabDivisao({ expList, peopleList }) {
-  const { txns, bal } = useMemo(()=>simplify(expList,peopleList),[expList,peopleList]);
-  if (!peopleList.length) return <Empty emoji="⚖️" title="Adiciona pessoas primeiro" subtitle="No separador Pessoas"/>;
-  const totalSpent = expList.reduce((s,e)=>s+ +e.amount,0);
-  const maxAbs     = Math.max(...Object.values(bal).map(v=>Math.abs(v)),0.01);
-
+  const {txns,bal}=useMemo(()=>simplify(expList,peopleList),[expList,peopleList]);
+  if(!peopleList.length) return <Empty emoji="⚖️" title="Adiciona pessoas primeiro" subtitle="No separador Pessoas"/>;
+  const totalSpent=expList.reduce((s,e)=>s+ +e.amount,0);
+  const maxAbs=Math.max(...Object.values(bal).map(v=>Math.abs(v)),0.01);
   return (
     <div style={{padding:"16px 16px 0"}}>
-      <div style={{marginBottom:22}}>
-        <div style={{fontSize:22,fontWeight:800}}>Divisão de Custos</div>
-        <div style={{fontSize:13,color:C.sec,marginTop:2}}>Simplificado · {txns.length} transferência{txns.length!==1?"s":""} necessária{txns.length!==1?"s":""}</div>
-      </div>
-
+      <div style={{marginBottom:22}}><div style={{fontSize:22,fontWeight:800}}>Divisão de Custos</div><div style={{fontSize:13,color:C.sec,marginTop:2}}>Simplificado · {txns.length} transferência{txns.length!==1?"s":""}</div></div>
       <SH title="Saldo por Pessoa"/>
-      <Card style={{marginBottom:22}}>
-        {peopleList.map((p,i)=>{
-          const b=bal[p.id]||0, pos=b>=0, pct=(Math.abs(b)/maxAbs)*100;
-          return (
-            <div key={p.id}>
-              <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px"}}>
-                <Av name={p.name} id={p.id}/>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div>
-                  <div style={{marginTop:7,height:5,background:C.fill,borderRadius:100,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${pct}%`,background:Math.abs(b)<0.01?C.fill:pos?C.success:C.danger,borderRadius:100,transition:"width .4s"}}/>
-                  </div>
-                  <div style={{fontSize:11,color:C.sec,marginTop:3}}>{Math.abs(b)<0.01?"Contas certas":pos?`A receber ${money(b)}`:`A pagar ${money(Math.abs(b))}`}</div>
-                </div>
-                <div style={{fontSize:16,fontWeight:800,color:Math.abs(b)<0.01?C.ter:pos?C.success:C.danger,minWidth:72,textAlign:"right"}}>
-                  {Math.abs(b)<0.01?"—":(pos?"+":"")+money(b)}
-                </div>
-              </div>
-              {i<peopleList.length-1 && <Line l={64}/>}
-            </div>
-          );
-        })}
-      </Card>
-
+      <Card style={{marginBottom:22}}>{peopleList.map((p,i)=>{
+        const b=bal[p.id]||0,pos=b>=0,pct=(Math.abs(b)/maxAbs)*100;
+        return(<div key={p.id}><div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px"}}>
+          <Av name={p.name} id={p.id}/>
+          <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:C.label}}>{p.name}</div><div style={{marginTop:7,height:5,background:C.fill,borderRadius:100,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:Math.abs(b)<0.01?C.fill:pos?C.success:C.danger,borderRadius:100,transition:"width .4s"}}/></div><div style={{fontSize:11,color:C.sec,marginTop:3}}>{Math.abs(b)<0.01?"Contas certas":pos?`A receber ${money(b)}`:`A pagar ${money(Math.abs(b))}`}</div></div>
+          <div style={{fontSize:16,fontWeight:800,color:Math.abs(b)<0.01?C.ter:pos?C.success:C.danger,minWidth:72,textAlign:"right"}}>{Math.abs(b)<0.01?"—":(pos?"+":"")+money(b)}</div>
+        </div>{i<peopleList.length-1&&<Line l={64}/>}</div>);
+      })}</Card>
       <SH title={`Transferências (${txns.length})`}/>
-      {txns.length===0 ? (
-        <Card style={{padding:"24px 16px",textAlign:"center",marginBottom:22}}>
-          <div style={{fontSize:36,marginBottom:8}}>🎉</div>
-          <div style={{fontSize:16,fontWeight:700,color:C.label}}>Tudo resolvido!</div>
-          <div style={{fontSize:13,color:C.sec,marginTop:4}}>Nenhuma dívida por liquidar</div>
-        </Card>
-      ) : (
-        <Card style={{marginBottom:22}}>
-          {txns.map((t,i)=>{
-            const from=peopleList.find(p=>p.id===t.from), to=peopleList.find(p=>p.id===t.to);
-            return (
-              <div key={i}>
-                <div style={{display:"flex",alignItems:"center",padding:"14px 16px",gap:10}}>
-                  <Av name={from?.name||"?"} id={t.from} size={34}/>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:14,color:C.label,lineHeight:1.4}}>
-                      <strong>{from?.name}</strong><span style={{color:C.sec}}> deve pagar a </span><strong>{to?.name}</strong>
-                    </div>
-                  </div>
-                  <Av name={to?.name||"?"} id={t.to} size={34}/>
-                  <div style={{fontSize:17,fontWeight:800,color:C.primary,minWidth:72,textAlign:"right"}}>{money(t.amount)}</div>
-                </div>
-                {i<txns.length-1 && <Line/>}
-              </div>
-            );
-          })}
-        </Card>
+      {txns.length===0?(
+        <Card style={{padding:"24px 16px",textAlign:"center",marginBottom:22}}><div style={{fontSize:36,marginBottom:8}}>🎉</div><div style={{fontSize:16,fontWeight:700,color:C.label}}>Tudo resolvido!</div><div style={{fontSize:13,color:C.sec,marginTop:4}}>Nenhuma dívida por liquidar</div></Card>
+      ):(
+        <Card style={{marginBottom:22}}>{txns.map((t,i)=>{const from=peopleList.find(p=>p.id===t.from),to=peopleList.find(p=>p.id===t.to);return(<div key={i}><div style={{display:"flex",alignItems:"center",padding:"14px 16px",gap:10}}><Av name={from?.name||"?"} id={t.from} size={34}/><div style={{flex:1}}><div style={{fontSize:14,color:C.label,lineHeight:1.4}}><strong>{from?.name}</strong><span style={{color:C.sec}}> deve pagar a </span><strong>{to?.name}</strong></div></div><Av name={to?.name||"?"} id={t.to} size={34}/><div style={{fontSize:17,fontWeight:800,color:C.primary,minWidth:72,textAlign:"right"}}>{money(t.amount)}</div></div>{i<txns.length-1&&<Line/>}</div>);})}</Card>
       )}
-
-      {expList.length>0 && (
-        <>
-          <SH title="Resumo Global"/>
-          <Card style={{padding:"2px 16px",marginBottom:22}}>
-            {[
-              {l:"Total gasto",       v:money(totalSpent)},
-              {l:"Por pessoa (média)",v:peopleList.length?money(totalSpent/peopleList.length):"—"},
-              {l:"Despesas",          v:expList.length},
-              {l:"Transferências",    v:`${txns.length} pagamento${txns.length!==1?"s":""}`},
-            ].map((r,i,arr)=>(
-              <div key={r.l}>
-                <div style={{display:"flex",justifyContent:"space-between",padding:"13px 0"}}>
-                  <span style={{fontSize:15,color:C.label}}>{r.l}</span>
-                  <span style={{fontSize:15,fontWeight:700}}>{r.v}</span>
-                </div>
-                {i<arr.length-1 && <Line/>}
-              </div>
-            ))}
-          </Card>
-        </>
-      )}
+      {expList.length>0&&(<><SH title="Resumo Global"/><Card style={{padding:"2px 16px",marginBottom:22}}>{[{l:"Total gasto",v:money(totalSpent)},{l:"Por pessoa",v:peopleList.length?money(totalSpent/peopleList.length):"—"},{l:"Despesas",v:expList.length},{l:"Transferências",v:`${txns.length} pagamento${txns.length!==1?"s":""}`}].map((r,i,arr)=>(<div key={r.l}><div style={{display:"flex",justifyContent:"space-between",padding:"13px 0"}}><span style={{fontSize:15,color:C.label}}>{r.l}</span><span style={{fontSize:15,fontWeight:700}}>{r.v}</span></div>{i<arr.length-1&&<Line/>}</div>))}</Card></>)}
     </div>
   );
 }
@@ -707,38 +707,44 @@ const TABS = [{id:"viagem",l:"Viagem"},{id:"pessoas",l:"Pessoas"},{id:"menu",l:"
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
-  const [screen,   setScreen]   = useState("loading");
-  const [trip,     setTripLocal]= useState(null);
-  const [peopleList,setPeopleList]=useState([]);
-  const [mealDocs, setMealDocs] = useState([]);
-  const [expList,  setExpList]  = useState([]);
-  const [tab,      setTab]      = useState("viagem");
-  const timer   = useRef(null);
-  const unsubs  = useRef([]);
+  const [screen,     setScreen]     = useState("loading");
+  const [user,       setUser]       = useState(null);
+  const [trip,       setTripLocal]  = useState(null);
+  const [peopleList, setPeopleList] = useState([]);
+  const [mealDocs,   setMealDocs]   = useState([]);
+  const [expList,    setExpList]    = useState([]);
+  const [tab,        setTab]        = useState("viagem");
+  const timer  = useRef(null);
+  const unsubs = useRef([]);
 
   const clearSubs = () => { unsubs.current.forEach(u=>u()); unsubs.current=[]; };
 
+  // Auth listener
   useEffect(()=>{
-    const saved = localStorage.getItem("ferias-trip-id");
-    if (saved) loadTrip(saved); else setScreen("join");
-    return clearSubs;
+    const unsub = auth.onAuthStateChanged(async (u) => {
+      if (u) {
+        setUser(u);
+        const saved = localStorage.getItem("ferias-trip-id");
+        if (saved) await loadTrip(saved);
+        else setScreen("tripselect");
+      } else {
+        setUser(null);
+        clearSubs();
+        setScreen("login");
+      }
+    });
+    return () => { unsub(); clearSubs(); };
   },[]);
 
   const loadTrip = async (id) => {
     clearSubs();
     const doc = await FS.trips().doc(id).get();
-    if (!doc.exists) { localStorage.removeItem("ferias-trip-id"); setScreen("join"); return; }
+    if (!doc.exists) { localStorage.removeItem("ferias-trip-id"); setScreen("tripselect"); return; }
     setTripLocal({id:doc.id,...doc.data()});
 
-    unsubs.current.push(
-      FS.people(id).orderBy("createdAt").onSnapshot(s=>setPeopleList(s.docs.map(FS.toDoc)))
-    );
-    unsubs.current.push(
-      FS.meals(id).onSnapshot(s=>setMealDocs(s.docs.map(d=>({id:d.id,...d.data()}))))
-    );
-    unsubs.current.push(
-      FS.expenses(id).orderBy("createdAt").onSnapshot(s=>setExpList(s.docs.map(FS.toDoc)))
-    );
+    unsubs.current.push(FS.people(id).orderBy("createdAt").onSnapshot(s=>setPeopleList(s.docs.map(FS.toDoc))));
+    unsubs.current.push(FS.meals(id).onSnapshot(s=>setMealDocs(s.docs.map(d=>({id:d.id,...d.data()})))));
+    unsubs.current.push(FS.expenses(id).orderBy("createdAt").onSnapshot(s=>setExpList(s.docs.map(FS.toDoc))));
     setScreen("app");
   };
 
@@ -757,11 +763,17 @@ function App() {
     await loadTrip(ref.id);
   };
 
-  const handleLeave = () => {
+  const handleLeaveTrip = () => {
     clearSubs();
     localStorage.removeItem("ferias-trip-id");
     setTripLocal(null); setPeopleList([]); setMealDocs([]); setExpList([]);
-    setScreen("join");
+    setScreen("tripselect");
+  };
+
+  const handleLogout = async () => {
+    clearSubs();
+    localStorage.removeItem("ferias-trip-id");
+    await auth.signOut();
   };
 
   const setTrip = useCallback((updater) => {
@@ -779,33 +791,29 @@ function App() {
     });
   },[]);
 
-  if (screen==="loading") return <Loader/>;
-  if (screen==="join")    return <JoinScreen onJoin={handleJoin} onCreate={handleCreate}/>;
+  if (screen==="loading")    return <Loader msg="A iniciar..."/>;
+  if (screen==="login")      return <LoginScreen onAuth={u=>{ setUser(u); setScreen("tripselect"); }}/>;
+  if (screen==="tripselect") return <TripSelectScreen user={user} onJoin={handleJoin} onCreate={handleCreate} onLogout={handleLogout}/>;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif",maxWidth:640,margin:"0 auto",paddingBottom:90}}>
       <div style={{background:"rgba(242,242,247,.88)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.sep}`,padding:"48px 20px 12px",position:"sticky",top:0,zIndex:100}}>
-        <div style={{fontSize:12,color:C.sec,fontWeight:500}}>{trip.location||"Férias em Grupo"}</div>
-        <div style={{fontSize:26,fontWeight:800,color:C.label,lineHeight:1.1,marginTop:1}}>{trip.name||"As Nossas Férias"}</div>
+        <div style={{fontSize:12,color:C.sec,fontWeight:500}}>{trip?.location||"Férias em Grupo"}</div>
+        <div style={{fontSize:26,fontWeight:800,color:C.label,lineHeight:1.1,marginTop:1}}>{trip?.name||"As Nossas Férias"}</div>
       </div>
-
       <div>
-        {tab==="viagem"   && <TabViagem   trip={trip} setTrip={setTrip} peopleList={peopleList} expList={expList} onLeave={handleLeave}/>}
+        {tab==="viagem"   && <TabViagem   trip={trip} setTrip={setTrip} peopleList={peopleList} expList={expList} onLeave={handleLeaveTrip}/>}
         {tab==="pessoas"  && <TabPessoas  tripId={trip.id} peopleList={peopleList}/>}
         {tab==="menu"     && <TabMenu     trip={trip} mealDocs={mealDocs} peopleList={peopleList}/>}
         {tab==="despesas" && <TabDespesas tripId={trip.id} expList={expList} peopleList={peopleList}/>}
         {tab==="divisao"  && <TabDivisao  expList={expList} peopleList={peopleList}/>}
       </div>
-
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(242,242,247,.92)",backdropFilter:"blur(20px)",borderTop:`1px solid ${C.sep}`,display:"flex",paddingBottom:"env(safe-area-inset-bottom,0)",zIndex:200}}>
         {TABS.map(t=>{
-          const active = tab===t.id;
-          return (
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 0 11px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-              {ICONS[t.id](active)}
-              <span style={{fontSize:10,fontWeight:600,color:active?C.primary:C.ter,letterSpacing:.2}}>{t.l}</span>
-            </button>
-          );
+          const active=tab===t.id;
+          return <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 0 11px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            {ICONS[t.id](active)}<span style={{fontSize:10,fontWeight:600,color:active?C.primary:C.ter,letterSpacing:.2}}>{t.l}</span>
+          </button>;
         })}
       </div>
     </div>

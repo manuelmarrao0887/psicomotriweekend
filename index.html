@@ -380,6 +380,86 @@ function TripSelectScreen({ user, onJoin, onCreate, onLogout }) {
   );
 }
 
+// ─── MAPS CARD ───────────────────────────────────────────────────────────────
+function MapsCard({ trip, setTrip }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal]         = useState("");
+  const url = trip.mapsUrl||"";
+
+  const save = () => {
+    const v = val.trim();
+    if (v) setTrip(t=>({...t, mapsUrl:v}));
+    setEditing(false);
+  };
+  const remove = () => setTrip(t=>({...t, mapsUrl:""}));
+
+  if (url && !editing) return (
+    <div style={{marginBottom:22,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,.08)"}}>
+      {/* Map banner */}
+      <div onClick={()=>window.open(url,"_blank")}
+        style={{background:"linear-gradient(135deg,#1a73e8 0%,#34A853 100%)",padding:"20px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,userSelect:"none"}}>
+        <div style={{width:46,height:46,borderRadius:13,background:"rgba(255,255,255,.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:16,fontWeight:700,color:"white"}}>Abrir no Google Maps</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,.85)",marginTop:2}}>{trip.location||"Ver localização da viagem"}</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </div>
+      {/* Footer */}
+      <div style={{background:C.card,padding:"11px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid "+C.sep}}>
+        <span style={{fontSize:12,color:C.ter,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:12}}>{url}</span>
+        <div style={{display:"flex",gap:12,flexShrink:0}}>
+          <button onClick={()=>{setVal(url);setEditing(true);}} style={{background:"none",border:"none",color:C.sec,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>editar</button>
+          <button onClick={remove} style={{background:"none",border:"none",color:C.danger,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>remover</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <Card style={{padding:"16px 16px",marginBottom:22}}>
+      {!editing ? (
+        <div>
+          <div style={{fontSize:14,color:C.sec,marginBottom:12,lineHeight:1.5}}>
+            Cola o link do Google Maps — vai aparecer um botão para abrir no Maps.
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{width:32,height:32,borderRadius:9,background:"#E8F0FE",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#1a73e8">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+            </div>
+            <button onClick={()=>{setVal("");setEditing(true);}}
+              style={{flex:1,textAlign:"left",padding:"10px 14px",borderRadius:10,border:"1.5px dashed "+C.sep,background:"transparent",fontSize:14,color:C.ter,cursor:"pointer",fontFamily:"inherit"}}>
+              Adicionar link do Google Maps...
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{fontSize:13,fontWeight:500,color:C.sec,marginBottom:8}}>Link do Google Maps</div>
+          <input autoFocus value={val} onChange={e=>setVal(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&save()}
+            placeholder="https://maps.app.goo.gl/..."
+            style={{width:"100%",padding:"12px 14px",borderRadius:10,border:"1.5px solid "+C.primary,background:C.fill,fontSize:14,color:C.label,outline:"none",boxSizing:"border-box",fontFamily:"inherit",marginBottom:12}}/>
+          <div style={{display:"flex",gap:8}}>
+            <Btn label="Guardar" onClick={save} small disabled={!val.trim()}/>
+            <Btn label="Cancelar" onClick={()=>setEditing(false)} small variant="secondary"/>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── TAB VIAGEM ───────────────────────────────────────────────────────────────
 function TabViagem({ trip, setTrip, peopleList, expList, onLeave }) {
   const nA    = peopleList.filter(p=>p.type==="adult").length;
@@ -455,6 +535,9 @@ function TabViagem({ trip, setTrip, peopleList, expList, onLeave }) {
           </div>
         ))}
       </Card>
+
+      <SH title="Localização no Mapa"/>
+      <MapsCard trip={trip} setTrip={setTrip}/>
 
       <SH title="Notas"/>
       <Card style={{padding:"14px 16px",marginBottom:22}}>
@@ -784,7 +867,7 @@ function App() {
         FS.trips().doc(next.id).update({
           name:next.name||"", location:next.location||"",
           startDate:next.startDate||"", endDate:next.endDate||"",
-          budget:next.budget||"", notes:next.notes||"",
+          budget:next.budget||"", notes:next.notes||"", mapsUrl:next.mapsUrl||"",
         });
       }, 700);
       return next;

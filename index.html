@@ -325,7 +325,7 @@ function TripSelectScreen({ user, onJoin, onCreate, onLogout }) {
     try {
       await onCreate();
     } catch(e) {
-      setErr("Erro ao criar viagem. Tenta de novo.");
+      setErr("Erro: " + (e?.code || e?.message || "desconhecido"));
       setCreating(false);
     }
   };
